@@ -14,3 +14,7 @@ Then you could run CLI via following command:
 ```shell
 ./cli/build/install/nagermor/lib/nagermor
 ```
+
+### Compilation
+
+To compile this project you need to use Java 11+.
