@@ -4,6 +4,7 @@ import by.egorr.nagermor.fscaching.FileSystemChangesDetector
 import com.github.ajalt.clikt.core.CliktCommand
 import com.github.ajalt.clikt.parameters.arguments.argument
 import com.github.ajalt.clikt.parameters.options.default
+import com.github.ajalt.clikt.parameters.options.flag
 import com.github.ajalt.clikt.parameters.options.option
 import com.github.ajalt.clikt.parameters.options.split
 import com.github.ajalt.clikt.parameters.types.file
@@ -21,6 +22,12 @@ private class Compile : CliktCommand() {
     )
         .split(":")
         .default(emptyList())
+
+    private val debug by option(
+        "--debug",
+        help = "Enable additional debug output."
+    )
+        .flag()
 
     private val sourcesDir by argument(
         name = "path_to_sources",
@@ -42,8 +49,8 @@ private class Compile : CliktCommand() {
     )
 
     override fun run() {
-        echo("Provided classpath: $classpath")
-        echo("Provided path to sources files: $sourcesDir")
+        debugEcho("Provided classpath: $classpath")
+        debugEcho("Provided path to sources files: $sourcesDir")
 
         val sourcesPath = sourcesDir.toPath()
 
@@ -51,8 +58,12 @@ private class Compile : CliktCommand() {
             sourcesPath,
             classpath
         )
-        echo("Provided classpath is changed since previous compilation: $isClasspathChanged")
+        debugEcho("Provided classpath is changed since previous compilation: $isClasspathChanged")
         val sourceFilesWithState = fsChangesDetector.getSourceStatus(sourcesPath)
-        echo("Found following source files: $sourceFilesWithState")
+        debugEcho("Found following source files: $sourceFilesWithState")
+    }
+
+    private fun debugEcho(message: String) {
+        if (debug) echo(message)
     }
 }
