@@ -10,4 +10,6 @@ application {
 
 dependencies {
     implementation("com.github.ajalt.clikt:clikt:3.0.1")
+
+    implementation(project(":fscaching"))
 }
