@@ -5,4 +5,9 @@ plugins {
 
 application {
     mainClassName = "by.egorr.nagermor.cli.CliKt"
+    applicationName = "nagermor"
+}
+
+dependencies {
+    implementation("com.github.ajalt.clikt:clikt:3.0.1")
 }
