@@ -9,6 +9,7 @@ import com.github.ajalt.clikt.parameters.options.option
 import com.github.ajalt.clikt.parameters.options.split
 import com.github.ajalt.clikt.parameters.types.file
 import java.nio.file.Paths
+import kotlin.system.exitProcess
 
 fun main(args: Array<String>) = Compile().main(args)
 
@@ -66,6 +67,13 @@ private class Compile : CliktCommand() {
         debugEcho("Provided classpath is changed since previous compilation: $isClasspathChanged")
         val sourceFilesWithState = fsChangesDetector.getSourceStatus(sourcesPath)
         debugEcho("Found following source files: $sourceFilesWithState")
+        if (sourceFilesWithState.isEmpty()) {
+            echo(
+                message = "Could not find any java sources under $sourcesDir",
+                err = true
+            )
+            exitProcess(1)
+        }
     }
 
     private fun debugEcho(message: String) {
