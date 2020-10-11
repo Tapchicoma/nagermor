@@ -50,7 +50,7 @@ class FileSystemChangesDetector(
         fileExtension: String = ".java"
     ): Map<Path, SourceFileState> = emptyMap()
 
-    private fun Path.classPathHashFile(): Path = sourcesCacheDir().resolve("classpath.hash").apply {
+    private fun Path.classPathHashFile(): Path = sourcesCacheDir().resolve("classpath_hash.bin").apply {
         if (!Files.exists(this)) {
             Files.createFile(this)
         }
