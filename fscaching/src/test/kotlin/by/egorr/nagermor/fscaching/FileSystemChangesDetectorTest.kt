@@ -1,5 +1,6 @@
 package by.egorr.nagermor.fscaching
 
+import by.egorr.nagermor.compiler.Compiler
 import com.google.common.jimfs.Jimfs
 import org.junit.jupiter.api.Test
 import java.nio.file.Files
@@ -79,7 +80,7 @@ internal class FileSystemChangesDetectorTest {
         val sources = fileSystemChangesDetector.getSourceStatus(sourcesDir)
         val expected = allFiles
             .filter { it.toString().endsWith(".java") }
-            .associateWith { FileSystemChangesDetector.SourceFileState.ADDED }
+            .associateWith { Compiler.SourceFileState.ADDED }
 
         assertEquals(
             expected,
@@ -95,7 +96,7 @@ internal class FileSystemChangesDetectorTest {
 
         val expected = allFiles
             .filter { it.toString().endsWith(".java") }
-            .associateWith { FileSystemChangesDetector.SourceFileState.NOT_CHANGED }
+            .associateWith { Compiler.SourceFileState.NOT_CHANGED }
 
         assertEquals(
             expected,
@@ -114,9 +115,9 @@ internal class FileSystemChangesDetectorTest {
             .filter { it.toString().endsWith(".java") }
             .associateWith {
                 if (it != allFiles[1]) {
-                    FileSystemChangesDetector.SourceFileState.NOT_CHANGED
+                    Compiler.SourceFileState.NOT_CHANGED
                 } else {
-                    FileSystemChangesDetector.SourceFileState.CHANGED
+                    Compiler.SourceFileState.CHANGED
                 }
             }
 
@@ -137,7 +138,7 @@ internal class FileSystemChangesDetectorTest {
         val expected = allFiles
             .filter { it.toString().endsWith(".java") }
             .associateWith {
-                FileSystemChangesDetector.SourceFileState.ADDED
+                Compiler.SourceFileState.ADDED
             }
 
         assertEquals(
@@ -158,9 +159,9 @@ internal class FileSystemChangesDetectorTest {
             .filter { it.toString().endsWith(".java") }
             .associateWith {
                 if (it != allFiles.last()) {
-                    FileSystemChangesDetector.SourceFileState.NOT_CHANGED
+                    Compiler.SourceFileState.NOT_CHANGED
                 } else {
-                    FileSystemChangesDetector.SourceFileState.REMOVED
+                    Compiler.SourceFileState.REMOVED
                 }
             }
 

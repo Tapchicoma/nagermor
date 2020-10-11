@@ -10,6 +10,7 @@ tasks.test {
 }
 
 dependencies {
+    api(project(":compiler"))
     implementation("commons-codec:commons-codec:1.15")
 
     testImplementation(platform("org.junit:junit-bom:5.7.0"))

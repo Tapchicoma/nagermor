@@ -1,5 +1,6 @@
 package by.egorr.nagermor.fscaching
 
+import by.egorr.nagermor.compiler.Compiler
 import by.egorr.nagermor.fscaching.hash.HashHelper
 import by.egorr.nagermor.fscaching.hash.HashHelper.Companion.toHex
 import by.egorr.nagermor.fscaching.hash.Sha256HashHelper
@@ -52,7 +53,7 @@ class FileSystemChangesDetector(
     fun getSourceStatus(
         sourcesPath: Path,
         fileExtension: String = ".java"
-    ): Map<Path, SourceFileState> {
+    ): Map<Path, Compiler.SourceFileState> {
         val fileVisitor = SourcesFileVisitor(fileExtension)
         Files.walkFileTree(sourcesPath, fileVisitor)
 
@@ -67,13 +68,13 @@ class FileSystemChangesDetector(
                     previousCompilationSourceFilesHashes.containsKey(entry.key) -> if (
                         entry.value.contentEquals(previousCompilationSourceFilesHashes[entry.key])
                     ) {
-                        SourceFileState.NOT_CHANGED
+                        Compiler.SourceFileState.NOT_CHANGED
                     } else {
-                        SourceFileState.CHANGED
+                        Compiler.SourceFileState.CHANGED
                     }.also {
                         previousCompilationSourceFilesHashes.remove(entry.key)
                     }
-                    else -> SourceFileState.ADDED
+                    else -> Compiler.SourceFileState.ADDED
                 }
             }
             .toMutableMap()
@@ -81,11 +82,11 @@ class FileSystemChangesDetector(
         if (previousCompilationSourceFilesHashes.isNotEmpty()) {
             result.putAll(
                 previousCompilationSourceFilesHashes
-                    .mapValues { SourceFileState.REMOVED }
+                    .mapValues { Compiler.SourceFileState.REMOVED }
             )
         }
 
-        if (result.values.filterNot { it == SourceFileState.NOT_CHANGED }.isNotEmpty()) {
+        if (result.values.filterNot { it == Compiler.SourceFileState.NOT_CHANGED }.isNotEmpty()) {
             cacheFile.writeSourceFilesCache(sourceFilesHashes)
         }
 
@@ -135,10 +136,6 @@ class FileSystemChangesDetector(
                 writer.write("${it.key};${Base64.encodeBase64String(it.value)}\n")
             }
         }
-    }
-
-    enum class SourceFileState {
-        ADDED, REMOVED, CHANGED, NOT_CHANGED;
     }
 
     private class SourcesFileVisitor(

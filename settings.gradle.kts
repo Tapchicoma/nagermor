@@ -5,4 +5,5 @@ pluginManagement {
 }
 
 include(":cli")
-include("fscaching")
+include(":fscaching")
+include(":compiler")

@@ -1,5 +1,6 @@
 package by.egorr.nagermor.cli
 
+import by.egorr.nagermor.compiler.Compiler
 import by.egorr.nagermor.fscaching.FileSystemChangesDetector
 import com.github.ajalt.clikt.core.CliktCommand
 import com.github.ajalt.clikt.parameters.arguments.argument
@@ -54,19 +55,24 @@ private class Compile : CliktCommand() {
         )
     )
 
+    private val compiler = Compiler(debug)
+
     override fun run() {
         debugEcho("Provided classpath: $classpath")
         debugEcho("Provided path to sources files: $sourcesDir")
 
         val sourcesPath = sourcesDir.toPath()
 
+        val classPath = classpath.map { it.toPath() }
         val isClasspathChanged = fsChangesDetector.isClassPathChanged(
             sourcesPath,
-            classpath.map { it.toPath() }
+            classPath
         )
         debugEcho("Provided classpath is changed since previous compilation: $isClasspathChanged")
+
         val sourceFilesWithState = fsChangesDetector.getSourceStatus(sourcesPath)
         debugEcho("Found following source files: $sourceFilesWithState")
+
         if (sourceFilesWithState.isEmpty()) {
             echo(
                 message = "Could not find any java sources under $sourcesDir",
@@ -74,6 +80,13 @@ private class Compile : CliktCommand() {
             )
             exitProcess(1)
         }
+
+        compiler.compileSources(
+            classPath = classPath,
+            isClassPathChanged = isClasspathChanged,
+            sourceDir = sourcesPath,
+            sourceFilesWithState
+        )
     }
 
     private fun debugEcho(message: String) {
