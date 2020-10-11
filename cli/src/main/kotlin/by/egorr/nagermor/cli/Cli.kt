@@ -20,6 +20,11 @@ private class Compile : CliktCommand() {
             Paths should be separated by ':' character. 
         """.trimMargin()
     )
+        .file(
+            mustExist = true,
+            mustBeReadable = true,
+            canBeSymlink = false
+        )
         .split(":")
         .default(emptyList())
 
@@ -56,7 +61,7 @@ private class Compile : CliktCommand() {
 
         val isClasspathChanged = fsChangesDetector.isClassPathChanged(
             sourcesPath,
-            classpath
+            classpath.map { it.toPath() }
         )
         debugEcho("Provided classpath is changed since previous compilation: $isClasspathChanged")
         val sourceFilesWithState = fsChangesDetector.getSourceStatus(sourcesPath)
