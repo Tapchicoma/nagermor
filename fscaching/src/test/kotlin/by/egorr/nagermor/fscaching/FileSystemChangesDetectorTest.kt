@@ -73,20 +73,150 @@ internal class FileSystemChangesDetectorTest {
         )
     }
 
+    @Test
+    internal fun `Should return all source files as added on first run`() {
+        val allFiles = sourcesDir.initialSources()
+        val sources = fileSystemChangesDetector.getSourceStatus(sourcesDir)
+        val expected = allFiles
+            .filter { it.toString().endsWith(".java") }
+            .associateWith { FileSystemChangesDetector.SourceFileState.ADDED }
+
+        assertEquals(
+            expected,
+            sources
+        )
+    }
+
+    @Test
+    internal fun `Should return all source files are not changed on the second run over same sources`() {
+        val allFiles = sourcesDir.initialSources()
+        fileSystemChangesDetector.getSourceStatus(sourcesDir)
+        val sources = fileSystemChangesDetector.getSourceStatus(sourcesDir)
+
+        val expected = allFiles
+            .filter { it.toString().endsWith(".java") }
+            .associateWith { FileSystemChangesDetector.SourceFileState.NOT_CHANGED }
+
+        assertEquals(
+            expected,
+            sources
+        )
+    }
+
+    @Test
+    internal fun `Should indicate some file is change if content of this source file was changed`() {
+        val allFiles = sourcesDir.initialSources()
+        fileSystemChangesDetector.getSourceStatus(sourcesDir)
+        Files.write(allFiles[1], "class Changed1();".toByteArray())
+        val sources = fileSystemChangesDetector.getSourceStatus(sourcesDir)
+
+        val expected = allFiles
+            .filter { it.toString().endsWith(".java") }
+            .associateWith {
+                if (it != allFiles[1]) {
+                    FileSystemChangesDetector.SourceFileState.NOT_CHANGED
+                } else {
+                    FileSystemChangesDetector.SourceFileState.CHANGED
+                }
+            }
+
+        assertEquals(
+            expected,
+            sources
+        )
+    }
+
+    @Test
+    internal fun `Should differentiate caching between different source dirs`() {
+        sourcesDir.initialSources()
+        fileSystemChangesDetector.getSourceStatus(sourcesDir)
+        val sourceDir2 = fs.getPath("/sources2")
+        val allFiles = sourceDir2.initialSources()
+        val sources = fileSystemChangesDetector.getSourceStatus(sourceDir2)
+
+        val expected = allFiles
+            .filter { it.toString().endsWith(".java") }
+            .associateWith {
+                FileSystemChangesDetector.SourceFileState.ADDED
+            }
+
+        assertEquals(
+            expected,
+            sources
+        )
+    }
+
+    @Test
+    internal fun `Should mark source file as deleted`() {
+        val allFiles = sourcesDir.initialSources()
+        fileSystemChangesDetector.getSourceStatus(sourcesDir)
+
+        Files.delete(allFiles.last())
+        val sources = fileSystemChangesDetector.getSourceStatus(sourcesDir)
+
+        val expected = allFiles
+            .filter { it.toString().endsWith(".java") }
+            .associateWith {
+                if (it != allFiles.last()) {
+                    FileSystemChangesDetector.SourceFileState.NOT_CHANGED
+                } else {
+                    FileSystemChangesDetector.SourceFileState.REMOVED
+                }
+            }
+
+        assertEquals(
+            expected,
+            sources
+        )
+    }
+
     private fun testClassPath(
         classpathDir: String = "/classpath1"
     ): List<Path> {
         val classpathPath = fs.getPath(classpathDir).apply { Files.createDirectories(this) }
 
         return listOf(
-            classpathPath.resolve("some-file-1.txt").apply {
-                Files.createFile(this)
-                Files.write(this, "some test content 1 $classpathDir".toByteArray())
-            },
-            classpathPath.resolve("some-file-2.txt").apply {
-                Files.createFile(this)
-                Files.write(this, "some test content 2 $classpathDir".toByteArray())
-            }
+            classpathPath.writeFile(
+                "some test content 1 $classpathDir",
+                "some-file-1.txt"
+            ),
+            classpathPath.writeFile(
+                "some test content 2 $classpathDir",
+                "some-file-2.txt"
+            ),
         )
     }
+
+    private fun Path.initialSources(): List<Path> = listOf(
+        writeFile(
+            "class Test1();",
+            "Test1.java",
+            "src", "main", "java", "1"
+        ),
+        writeFile(
+            "class Test2();",
+            "Test2.java",
+            "src", "main", "java", "2"
+        ),
+        writeFile(
+            "Readme",
+            "README.md",
+            "docs"
+        ),
+    )
+
+    private fun Path.writeFile(
+        content: String,
+        fileName: String,
+        vararg parentDirs: String
+    ) = parentDirs
+        .fold(this) { acc, dir -> acc.resolve(dir) }
+        .apply {
+            Files.createDirectories(this)
+        }
+        .resolve(fileName)
+        .apply {
+            Files.createFile(this)
+            Files.write(this, content.toByteArray())
+        }
 }
