@@ -9,9 +9,24 @@ subprojects {
         mavenCentral()
     }
 
-    tasks.withType<KotlinCompile>().configureEach {
+    tasks.withType<KotlinCompile> {
         kotlinOptions {
             jvmTarget = "11"
+        }
+    }
+
+    tasks.withType<Test> {
+        useJUnitPlatform()
+        testLogging {
+            events("passed", "skipped", "failed")
+        }
+    }
+
+    plugins.withId("kotlin") {
+        dependencies {
+            "testImplementation"(platform("org.junit:junit-bom:5.7.0"))
+            "testImplementation"("org.junit.jupiter:junit-jupiter")
+            "testImplementation"(kotlin("test-junit5"))
         }
     }
 }
