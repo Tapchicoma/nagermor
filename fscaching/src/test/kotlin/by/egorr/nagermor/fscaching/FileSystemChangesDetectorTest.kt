@@ -171,6 +171,20 @@ internal class FileSystemChangesDetectorTest {
         )
     }
 
+    @Test
+    internal fun `Should mark classpath is changed after clearing cache`() {
+        val classPath = testClassPath()
+        fileSystemChangesDetector.isClassPathChanged(sourcesDir, classPath)
+        fileSystemChangesDetector.clearCache(sourcesDir)
+
+        val isChanged = fileSystemChangesDetector.isClassPathChanged(sourcesDir, classPath)
+
+        assertEquals(
+            true,
+            isChanged
+        )
+    }
+
     private fun testClassPath(
         classpathDir: String = "/classpath1"
     ): List<Path> {

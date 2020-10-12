@@ -93,6 +93,14 @@ class FileSystemChangesDetector(
         return result.toMap()
     }
 
+    /**
+     * Clears previous compilation caches for given [sourceDir].
+     */
+    fun clearCache(sourceDir: Path) {
+        Files.deleteIfExists(sourceDir.classPathHashFile())
+        Files.deleteIfExists(sourceDir.sourcesHashFile())
+    }
+
     private fun Path.classPathHashFile(): Path = sourcesCacheDir().resolve("classpath_hash.bin").apply {
         if (!Files.exists(this)) {
             Files.createFile(this)
