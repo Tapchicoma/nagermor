@@ -55,7 +55,7 @@ private class Compile : CliktCommand() {
         )
     )
 
-    private val compiler = Compiler(debug)
+    private val compiler by lazy { Compiler(debug = debug) }
 
     override fun run() {
         debugEcho("Provided classpath: $classpath")
@@ -81,12 +81,16 @@ private class Compile : CliktCommand() {
             exitProcess(1)
         }
 
-        compiler.compileSources(
+        val result = compiler.compileSources(
             classPath = classPath,
             isClassPathChanged = isClasspathChanged,
             sourceDir = sourcesPath,
             sourceFilesWithState
         )
+
+        if (result != 0) fsChangesDetector.clearCache(sourcesPath)
+
+        exitProcess(result)
     }
 
     private fun debugEcho(message: String) {
