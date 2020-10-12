@@ -5,6 +5,7 @@ import org.junit.jupiter.api.Test
 import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.test.assertEquals
+import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 
 internal class CompilerTest {
@@ -48,6 +49,24 @@ internal class CompilerTest {
         assertNull(testCompilerBackend.lastCompilationClassPath)
         assertNull(testCompilerBackend.lastCompilationOutputDir)
         assertNull(testCompilerBackend.lastCompilationSourceFiles)
+    }
+
+    @Test
+    internal fun `Should run full recompilation when classpath was not changed, but all source files are new`() {
+        val testClassPath = generateTestClasspath()
+        val testSourceFiles = generateTestSources()
+
+        val compilationResult = compiler.compileSources(
+            testClassPath,
+            false,
+            testSourcesDir,
+            testSourceFiles.associateWith { Compiler.SourceFileState.ADDED }
+        )
+
+        assertEquals(0, compilationResult)
+        assertEquals(testClassPath, testCompilerBackend.lastCompilationClassPath)
+        assertNotNull(testCompilerBackend.lastCompilationOutputDir)
+        assertEquals(testSourceFiles, testCompilerBackend.lastCompilationSourceFiles)
     }
 
     private fun generateTestClasspath(): List<Path> {

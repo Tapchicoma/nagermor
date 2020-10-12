@@ -39,6 +39,19 @@ class Compiler(
             return 0
         }
 
+        if (sourceFilesWithState
+                .values
+                .filterNot { it == SourceFileState.ADDED }
+                .isEmpty()
+        ) {
+            if (debug) println("All sources files in added state, running full recompile")
+            return compilerBackend.compile(
+                sourceDir.outputDir(),
+                classPath,
+                sourceFilesWithState.keys.toList()
+            )
+        }
+
         return 1
     }
 
