@@ -1,5 +1,6 @@
 package by.egorr.nagermor.compiler
 
+import by.egorr.nagermor.compiler.backend.JavacCompilerBackend
 import java.nio.file.Path
 
 /**
@@ -8,7 +9,8 @@ import java.nio.file.Path
  * @param debug enable debug logging
  */
 class Compiler(
-    private val debug: Boolean
+    private val compilerBackend: CompilerBackend = JavacCompilerBackend(),
+    private val debug: Boolean = false
 ) {
     /**
      * Incrementally compile passed sources.
