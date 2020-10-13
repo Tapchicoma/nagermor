@@ -87,6 +87,27 @@ internal class JavaAbiReaderTest {
         assertTrue { classAbi.publicTypes.contains("ExtendsBase") }
     }
 
+    @Test
+    internal fun `Should parse public method type into public types`() {
+        val classAbi = abiReader.parseSourceFileAbi(getTestJavaClass("ImplementsBaseInterface.class"))
+
+        assertTrue { classAbi.publicTypes.contains("Base") }
+    }
+
+    @Test
+    internal fun `Should parse private method type into private types`() {
+        val classAbi = abiReader.parseSourceFileAbi(getTestJavaClass("ImplementsBaseInterface.class"))
+
+        assertTrue { classAbi.privateTypes.contains("ExtendsBase") }
+    }
+
+    @Test
+    internal fun `Should put private method exceptions into private types`() {
+        val classAbi = abiReader.parseSourceFileAbi(getTestJavaClass("ImplementsBaseInterface.class"))
+
+        assertTrue { classAbi.privateTypes.contains("TestException") }
+    }
+
     private fun getTestJavaClass(
         name: String
     ): Path = Paths.get(this::class.java.classLoader.getResource("java-source-output/$name")!!.toURI())

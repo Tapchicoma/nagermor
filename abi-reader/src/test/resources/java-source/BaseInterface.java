@@ -1,5 +1,5 @@
 public interface BaseInterface {
-    void methodOne();
+    Base methodOne();
 
     void methodTwo();
 }

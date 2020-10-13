@@ -72,12 +72,19 @@ class JavaAbiReader : AbiReader {
 
         override fun visitMethod(
             access: Int,
-            name: String?,
-            descriptor: String?,
+            name: String,
+            descriptor: String,
             signature: String?,
             exceptions: Array<out String>?
         ): MethodVisitor? {
-            System.err.println("Visiting method: $name, signature: $signature, exceptions: $exceptions")
+            // TODO: Parse method internal types, annotations, parameter types
+            writeTypes(access.isPrivate()) { types ->
+                types.add(Type.getMethodType(descriptor).returnType.className)
+
+                exceptions?.forEach {
+                    types.add(it)
+                }
+            }
             return null
         }
 
