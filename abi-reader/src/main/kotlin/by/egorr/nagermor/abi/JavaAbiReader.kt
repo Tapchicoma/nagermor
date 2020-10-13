@@ -4,7 +4,6 @@ import org.objectweb.asm.ClassReader
 import org.objectweb.asm.ClassVisitor
 import org.objectweb.asm.FieldVisitor
 import org.objectweb.asm.MethodVisitor
-import org.objectweb.asm.ModuleVisitor
 import org.objectweb.asm.Opcodes
 import org.objectweb.asm.Type
 import java.lang.reflect.Modifier
@@ -59,13 +58,16 @@ class JavaAbiReader : AbiReader {
 
         override fun visitField(
             access: Int,
-            name: String?,
-            descriptor: String?,
+            name: String,
+            descriptor: String,
             signature: String?,
             value: Any?
-        ): FieldVisitor {
-            System.err.println("Visiting field: $name")
-            return super.visitField(access, name, descriptor, signature, value)
+        ): FieldVisitor? {
+            // TODO: Parse field annotations via FieldVisitor
+            writeTypes(access.isPrivate()) {
+                it.add(Type.getType(descriptor).className)
+            }
+            return null
         }
 
         override fun visitMethod(
