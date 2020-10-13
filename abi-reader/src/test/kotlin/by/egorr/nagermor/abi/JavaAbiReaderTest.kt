@@ -108,6 +108,13 @@ internal class JavaAbiReaderTest {
         assertTrue { classAbi.privateTypes.contains("TestException") }
     }
 
+    @Test
+    internal fun `Should parse public method parameters into public types`() {
+        val classAbi = abiReader.parseSourceFileAbi(getTestJavaClass("WithMethodParameters.class"))
+
+        assertTrue { classAbi.publicTypes.containsAll(listOf("Base", "ImplementsBaseInterface")) }
+    }
+
     private fun getTestJavaClass(
         name: String
     ): Path = Paths.get(this::class.java.classLoader.getResource("java-source-output/$name")!!.toURI())

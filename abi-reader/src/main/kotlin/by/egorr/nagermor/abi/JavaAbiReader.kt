@@ -77,10 +77,12 @@ class JavaAbiReader : AbiReader {
             signature: String?,
             exceptions: Array<out String>?
         ): MethodVisitor? {
-            // TODO: Parse method internal types, annotations, parameter types
+            // TODO: Parse method internal types, annotations via MethodVisitor
             writeTypes(access.isPrivate()) { types ->
                 types.add(Type.getMethodType(descriptor).returnType.className)
-
+                Type.getArgumentTypes(descriptor)?.forEach {
+                    types.add(it.className)
+                }
                 exceptions?.forEach {
                     types.add(it)
                 }
