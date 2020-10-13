@@ -7,3 +7,4 @@ pluginManagement {
 include(":cli")
 include(":fscaching")
 include(":compiler")
+include(":abi-reader")
