@@ -39,6 +39,25 @@ internal class JavaAbiReaderTest {
         )
     }
 
+    @Test
+    internal fun `Should return interface name`() {
+        val classAbi = abiReader.parseSourceFileAbi(getTestJavaClass("BaseInterface.class"))
+
+        assertEquals(
+            "BaseInterface",
+            classAbi.className
+        )
+    }
+
+    @Test
+    internal fun `Should put implemented interface into public types`() {
+        val classAbi = abiReader.parseSourceFileAbi(getTestJavaClass("ImplementsBaseInterface.class"))
+
+        assertTrue(
+            classAbi.publicTypes.contains("BaseInterface")
+        )
+    }
+
     private fun getTestJavaClass(
         name: String
     ): Path = Paths.get(this::class.java.classLoader.getResource("java-compiled/$name")!!.toURI())
