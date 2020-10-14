@@ -1,0 +1,206 @@
+package by.egorr.nagermor.compiler
+
+import by.egorr.nagermor.abi.AbiReader
+
+internal class AbiDependencyGraph {
+    private val graph = hashMapOf<ClassNode, MutableSet<AbiDependencyEdge>>()
+
+    fun addNode(classAbi: AbiReader.SourceFileAbi) {
+        val node = ClassNode(classAbi.className)
+        val edges = graph[node] ?: mutableSetOf()
+
+        require(edges.filterIsInstance<AbiDependencyEdge.IncomingEdge>().isEmpty()) {
+            "Failed to add, node for ${classAbi.className} is already exists"
+        }
+
+        fun createEdges(type: String, isPrivate: Boolean) {
+            edges.add(
+                AbiDependencyEdge.IncomingEdge(
+                    isPrivate = isPrivate,
+                    dependsOnClass = type
+                )
+            )
+
+            val dependsOnNode = ClassNode(type)
+            val dependsOnNodeEdges = graph[dependsOnNode] ?: mutableSetOf()
+
+            dependsOnNodeEdges.add(
+                AbiDependencyEdge.OutgoingEdge(
+                    isPrivate = isPrivate,
+                    dependentClass = classAbi.className
+                )
+            )
+            graph[dependsOnNode] = dependsOnNodeEdges
+        }
+
+        classAbi
+            .publicTypes
+            .forEach { createEdges(it, false) }
+        classAbi
+            .privateTypes
+            .forEach { createEdges(it, true) }
+
+        graph[node] = edges
+    }
+
+    fun updateNode(classAbi: AbiReader.SourceFileAbi): Set<String> {
+        val nodeDependencies = graph[ClassNode(classAbi.className)]
+
+        requireNotNull(nodeDependencies) {
+            "Failed to update, dependency graph does not contain a node for ${classAbi.className} class."
+        }
+
+        val incomingDependencies = nodeDependencies.filterIsInstance<AbiDependencyEdge.IncomingEdge>()
+        val incomingDependenciesTypes = incomingDependencies.map { it.dependsOnClass }
+
+        val allTypes = classAbi.publicTypes + classAbi.privateTypes
+        val removedDependencies = incomingDependenciesTypes.subtract(allTypes)
+        val addedDependencies = allTypes.subtract(incomingDependenciesTypes)
+        val possiblyChangedDependencies = allTypes.subtract(addedDependencies)
+
+        removedDependencies.forEach { removedType ->
+            nodeDependencies.removeIf { it is AbiDependencyEdge.IncomingEdge && it.dependsOnClass == removedType }
+            graph[ClassNode(removedType)]?.run {
+                removeIf { it is AbiDependencyEdge.OutgoingEdge && it.dependentClass == classAbi.className }
+            }
+        }
+
+        addedDependencies.forEach { addedType ->
+            val isPrivate = classAbi.privateTypes.contains(addedType)
+            nodeDependencies.add(
+                AbiDependencyEdge.IncomingEdge(
+                    isPrivate = isPrivate,
+                    dependsOnClass = addedType
+                )
+            )
+
+            graph[ClassNode(addedType)]?.run {
+                add(
+                    AbiDependencyEdge.OutgoingEdge(
+                        isPrivate = isPrivate,
+                        dependentClass = classAbi.className
+                    )
+                )
+            }
+        }
+
+        incomingDependencies
+            .filter { edge ->
+                possiblyChangedDependencies.contains(edge.dependsOnClass) &&
+                    edge.isPrivate != classAbi.privateTypes.contains(edge.dependsOnClass)
+            }
+            .forEach { edge ->
+                nodeDependencies.remove(edge)
+
+                val isPrivate = classAbi.privateTypes.contains(edge.dependsOnClass)
+                nodeDependencies.add(
+                    AbiDependencyEdge.IncomingEdge(
+                        isPrivate = isPrivate,
+                        dependsOnClass = edge.dependsOnClass
+                    )
+                )
+
+                graph[ClassNode(edge.dependsOnClass)]?.run {
+                    removeIf { it is AbiDependencyEdge.OutgoingEdge && it.dependentClass == classAbi.className }
+                    add(
+                        AbiDependencyEdge.OutgoingEdge(
+                            isPrivate = isPrivate,
+                            dependentClass = classAbi.className
+                        )
+                    )
+                }
+            }
+
+        graph[ClassNode(classAbi.className)] = nodeDependencies
+
+        return nodeDependencies.detectClassesToRecompile(classAbi.className)
+    }
+
+    fun deleteNode(className: String): Set<String> {
+        val node = ClassNode(className)
+        val deleteNodeDependencies = graph[node]
+
+        requireNotNull(deleteNodeDependencies) {
+            "Failed to delete, dependency graph does not contain a node for $className class."
+        }
+
+        val classesToRecompile = deleteNodeDependencies.detectClassesToRecompile(className)
+
+        deleteNodeDependencies
+            .filterIsInstance<AbiDependencyEdge.OutgoingEdge>()
+            .forEach { edge ->
+                graph[ClassNode(edge.dependentClass)]?.run {
+                    removeAll { it is AbiDependencyEdge.IncomingEdge && it.dependsOnClass == className }
+                }
+            }
+        graph.remove(node)
+
+        return classesToRecompile.toSet()
+    }
+
+    private fun Set<AbiDependencyEdge>.detectClassesToRecompile(
+        className: String
+    ): Set<String> {
+        val accumulator = mutableSetOf<DependencyToRecompile>()
+
+        detectRecompileDependenciesRecursively(
+            className,
+            accumulator,
+        )
+
+        return accumulator
+            .fold(mutableSetOf<String>()) { acc, dependencyToRecompile ->
+                acc.addAll(dependencyToRecompile.dependentTypes)
+                acc
+            }
+            .filterNot { it == className }
+            .toSet()
+    }
+
+    private fun Set<AbiDependencyEdge>.detectRecompileDependenciesRecursively(
+        className: String,
+        accumulator: MutableSet<DependencyToRecompile>,
+    ) {
+        val outgoingEdges = filterIsInstance<AbiDependencyEdge.OutgoingEdge>()
+
+        accumulator.add(
+            DependencyToRecompile(
+                className,
+                outgoingEdges.map { it.dependentClass }.toSet()
+            )
+        )
+
+        outgoingEdges
+            .filterNot { edge ->
+                edge.isPrivate ||
+                    accumulator.find { it.className == edge.dependentClass } != null
+            }
+            .forEach {
+                graph[ClassNode(it.dependentClass)]?.detectRecompileDependenciesRecursively(
+                    it.dependentClass,
+                    accumulator
+                )
+            }
+    }
+
+    private data class DependencyToRecompile(
+        val className: String,
+        val dependentTypes: Set<String>
+    )
+
+    private data class ClassNode(
+        val className: String
+    )
+
+    private sealed class AbiDependencyEdge {
+        data class OutgoingEdge(
+            val isPrivate: Boolean,
+            val dependentClass: String
+        ) : AbiDependencyEdge()
+
+        data class IncomingEdge(
+            val isPrivate: Boolean,
+            val dependsOnClass: String
+        ) : AbiDependencyEdge()
+    }
+}

@@ -9,7 +9,7 @@ interface AbiReader {
 
     data class SourceFileAbi(
         val className: String,
-        val sourceFileName: String?,
+        val sourceFileName: String? = null,
         val privateTypes: Set<String>,
         val publicTypes: Set<String>
     )
