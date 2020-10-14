@@ -19,24 +19,22 @@ class JavaAbiReader : AbiReader {
         val classReader = ClassReader(Files.newInputStream(compiledSourceFile))
         classReader.accept(classVisitor, 0)
 
+        val publicTypes = classVisitor.publicTypes.toSet()
+        val privateTypes = classVisitor.privateTypes.subtract(publicTypes).toSet()
+
         return AbiReader.SourceFileAbi(
             className = classVisitor.className,
             sourceFileName = classVisitor.sourceFileName,
-            privateTypes = classVisitor.privateTypes.filter(::filterJvmClasses).toList(),
-            publicTypes = classVisitor.publicTypes.filter(::filterJvmClasses).toList()
+            privateTypes = privateTypes,
+            publicTypes = publicTypes
         )
-    }
-
-    private fun filterJvmClasses(type: String): Boolean = when {
-        type.startsWith("java/lang") -> false
-        else -> true
     }
 
     private class JavaClassVisitor : ClassVisitor(Opcodes.ASM9) {
         var sourceFileName: String? = null
         lateinit var className: String
-        val publicTypes = mutableListOf<String>()
-        val privateTypes = mutableListOf<String>()
+        val publicTypes = mutableSetOf<String>()
+        val privateTypes = mutableSetOf<String>()
 
         override fun visit(
             version: Int,
@@ -96,9 +94,7 @@ class JavaAbiReader : AbiReader {
             innerName: String?,
             access: Int
         ) {
-            System.err.println(
-                "Visiting inner class $name, outer name: $outerName, inner name: $innerName, is private: ${access.isPrivate()}"
-            )
+            // TODO: Parse inner classes
         }
 
         override fun visitSource(
@@ -110,7 +106,7 @@ class JavaAbiReader : AbiReader {
 
         private inline fun writeTypes(
             isPrivate: Boolean,
-            block: (MutableList<String>) -> Unit
+            block: (MutableSet<String>) -> Unit
         ) {
             if (isPrivate) {
                 block(privateTypes)
