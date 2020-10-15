@@ -1,4 +1,4 @@
-package by.egorr.nagermor.compiler
+package by.egorr.nagermor.compiler.incremental
 
 import by.egorr.nagermor.abi.AbiReader
 import by.egorr.nagermor.abi.JavaAbiReader

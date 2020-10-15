@@ -1,6 +1,7 @@
-package by.egorr.nagermor.compiler
+package by.egorr.nagermor.compiler.incremental
 
 import by.egorr.nagermor.abi.AbiReader
+import by.egorr.nagermor.compiler.incremental.AbiDependencyGraph
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.Arguments
