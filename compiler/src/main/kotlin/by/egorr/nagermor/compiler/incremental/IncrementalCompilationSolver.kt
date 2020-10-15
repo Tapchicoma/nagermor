@@ -11,6 +11,8 @@ class IncrementalCompilationSolver(
     private val incrementalCacheFile: Path,
     private val abiReader: AbiReader = JavaAbiReader(),
 ) {
+    private val graph = AbiDependencyGraph.deserialize(incrementalCacheFile)
+
     fun sourceFileRemoved(
         outputDir: Path,
         sourceFile: Path

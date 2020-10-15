@@ -1,9 +1,17 @@
 package by.egorr.nagermor.compiler.incremental
 
 import by.egorr.nagermor.abi.AbiReader
+import kotlinx.serialization.ExperimentalSerializationApi
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.cbor.Cbor
+import kotlinx.serialization.decodeFromByteArray
+import kotlinx.serialization.encodeToByteArray
+import java.nio.file.Files
+import java.nio.file.Path
 
-internal class AbiDependencyGraph {
-    private val graph = hashMapOf<ClassNode, MutableSet<AbiDependencyEdge>>()
+internal class AbiDependencyGraph(
+    private val graph: HashMap<ClassNode, MutableSet<AbiDependencyEdge>>
+) {
 
     fun addNode(classAbi: AbiReader.SourceFileAbi) {
         val node = ClassNode(classAbi.className)
@@ -138,6 +146,14 @@ internal class AbiDependencyGraph {
         return classesToRecompile.toSet()
     }
 
+    @OptIn(ExperimentalSerializationApi::class)
+    fun serialize(cacheFile: Path) {
+        Files.write(
+            cacheFile,
+            Cbor.encodeToByteArray(graph)
+        )
+    }
+
     private fun Set<AbiDependencyEdge>.detectClassesToRecompile(
         className: String
     ): Set<String> {
@@ -188,11 +204,13 @@ internal class AbiDependencyGraph {
         val dependentTypes: Set<String>
     )
 
-    private data class ClassNode(
+    @Serializable
+    internal data class ClassNode(
         val className: String
     )
 
-    private sealed class AbiDependencyEdge {
+    @Serializable
+    internal sealed class AbiDependencyEdge {
         data class OutgoingEdge(
             val isPrivate: Boolean,
             val dependentClass: String
@@ -202,5 +220,14 @@ internal class AbiDependencyGraph {
             val isPrivate: Boolean,
             val dependsOnClass: String
         ) : AbiDependencyEdge()
+    }
+
+    companion object {
+        @OptIn(ExperimentalSerializationApi::class)
+        internal fun deserialize(
+            cacheFile: Path
+        ): AbiDependencyGraph = AbiDependencyGraph(
+            Cbor.decodeFromByteArray(Files.readAllBytes(cacheFile))
+        )
     }
 }
