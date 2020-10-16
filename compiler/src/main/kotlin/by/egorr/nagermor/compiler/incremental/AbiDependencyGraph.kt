@@ -6,8 +6,6 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.cbor.Cbor
 import kotlinx.serialization.decodeFromByteArray
 import kotlinx.serialization.encodeToByteArray
-import java.nio.file.Files
-import java.nio.file.Path
 
 internal class AbiDependencyGraph(
     private val graph: HashMap<ClassNode, MutableSet<AbiDependencyEdge>>
@@ -108,11 +106,8 @@ internal class AbiDependencyGraph(
     }
 
     @OptIn(ExperimentalSerializationApi::class)
-    fun serialize(cacheFile: Path) {
-        Files.write(
-            cacheFile,
-            Cbor.encodeToByteArray(graph)
-        )
+    fun serialize(): ByteArray {
+        return Cbor.encodeToByteArray(graph)
     }
 
     private fun addNewNode(classAbi: AbiReader.SourceFileAbi) {
@@ -241,9 +236,9 @@ internal class AbiDependencyGraph(
     companion object {
         @OptIn(ExperimentalSerializationApi::class)
         internal fun deserialize(
-            cacheFile: Path
+            cachedData: ByteArray
         ): AbiDependencyGraph = AbiDependencyGraph(
-            Cbor.decodeFromByteArray(Files.readAllBytes(cacheFile))
+            Cbor.decodeFromByteArray(cachedData)
         )
     }
 }

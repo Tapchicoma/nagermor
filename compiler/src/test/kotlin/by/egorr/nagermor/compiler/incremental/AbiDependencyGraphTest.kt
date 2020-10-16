@@ -1,14 +1,12 @@
 package by.egorr.nagermor.compiler.incremental
 
 import by.egorr.nagermor.abi.AbiReader
-import com.google.common.jimfs.Jimfs
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.Arguments
 import org.junit.jupiter.params.provider.MethodSource
-import java.nio.file.Files
 import java.util.stream.Stream
 import kotlin.test.assertEquals
 
@@ -37,14 +35,9 @@ internal class AbiDependencyGraphTest {
     @DisplayName("Should correctly serialize and deserialize graph")
     @Test
     internal fun serialization() {
-        val fs = Jimfs.newFileSystem()
-        val testCacheDir = fs.getPath("/cache")
-        Files.createDirectories(testCacheDir)
-        val testCacheFile = testCacheDir.resolve("test-cache.bin")
+        val serializedByteArray = graph.serialize()
 
-        graph.serialize(testCacheFile)
-
-        val newGraph = AbiDependencyGraph.deserialize(testCacheFile)
+        val newGraph = AbiDependencyGraph.deserialize(serializedByteArray)
 
         assertEquals(
             graph,
