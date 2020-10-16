@@ -1,29 +1,32 @@
 package by.egorr.nagermor.compiler.incremental
 
 import by.egorr.nagermor.abi.AbiReader
-import by.egorr.nagermor.compiler.incremental.AbiDependencyGraph
+import com.google.common.jimfs.Jimfs
 import org.junit.jupiter.api.BeforeEach
+import org.junit.jupiter.api.DisplayName
+import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.Arguments
 import org.junit.jupiter.params.provider.MethodSource
+import java.nio.file.Files
 import java.util.stream.Stream
 import kotlin.test.assertEquals
 
 internal class AbiDependencyGraphTest {
-    private val graph = AbiDependencyGraph()
+    private val graph = AbiDependencyGraph(hashMapOf())
 
     @BeforeEach
     internal fun setUp() {
         fillGraphWithTestData()
     }
 
-    @ParameterizedTest(name = "Should correctly return classes to recompile on node delete")
-    @MethodSource("provideDeleteTestData")
-    internal fun recompileClassesOnDelete(
+    @ParameterizedTest(name = "Should correctly return classes to recompile on class update")
+    @MethodSource("provideUpdateTestData")
+    internal fun recompileClassesOnUpdate(
         classToDelete: String,
         expectedClassesToRecompile: Set<String>
     ) {
-        val classesToRecompile = graph.deleteNode(classToDelete)
+        val classesToRecompile = graph.getClassesToRecompileOnClassChange(classToDelete)
 
         assertEquals(
             expectedClassesToRecompile,
@@ -31,27 +34,44 @@ internal class AbiDependencyGraphTest {
         )
     }
 
-    @ParameterizedTest(name = "Should correctly return classes to recompile on node update")
-    @MethodSource("provideUpdateTestData")
-    internal fun recompileClassesOnUpdate(
-        updateClassAbi: AbiReader.SourceFileAbi,
-        expectedClassesToRecompile: Set<String>
-    ) {
-        val classesToRecompile = graph.updateNode(updateClassAbi)
+    @DisplayName("Should correctly serialize and deserialize graph")
+    @Test
+    internal fun serialization() {
+        val fs = Jimfs.newFileSystem()
+        val testCacheDir = fs.getPath("/cache")
+        Files.createDirectories(testCacheDir)
+        val testCacheFile = testCacheDir.resolve("test-cache.bin")
+
+        graph.serialize(testCacheFile)
+
+        val newGraph = AbiDependencyGraph.deserialize(testCacheFile)
 
         assertEquals(
-            expectedClassesToRecompile,
+            graph,
+            newGraph
+        )
+    }
+
+    @DisplayName("Should return no classes to recompile for already deleted node")
+    @Test
+    internal fun deleteNode() {
+        graph.deleteNode("com/example/OneCyclic")
+
+        val classesToRecompile = graph.getClassesToRecompileOnClassChange("com/example/OneCyclic")
+
+        assertEquals(
+            emptySet(),
             classesToRecompile
         )
     }
 
     private fun fillGraphWithTestData() {
-        graph.addNode(AbiReader.SourceFileAbi(
+        graph.updateOrAddNode(AbiReader.SourceFileAbi(
             className = "com/example/Base",
             privateTypes = emptySet(),
             publicTypes = setOf("java/lang/Object")
         ))
-        graph.addNode(AbiReader.SourceFileAbi(
+        graph.updateOrAddNode(AbiReader.SourceFileAbi(
             className = "com/example/ExtendsBase",
             privateTypes = emptySet(),
             publicTypes = setOf(
@@ -60,22 +80,22 @@ internal class AbiDependencyGraphTest {
                 "com/example/OneCyclic"
             )
         ))
-        graph.addNode(AbiReader.SourceFileAbi(
+        graph.updateOrAddNode(AbiReader.SourceFileAbi(
             className = "com/example/BaseInterface",
             privateTypes = emptySet(),
             publicTypes = emptySet()
         ))
-        graph.addNode(AbiReader.SourceFileAbi(
+        graph.updateOrAddNode(AbiReader.SourceFileAbi(
             className = "com/example/OneCyclic",
             privateTypes = emptySet(),
             publicTypes = setOf("com/example/TwoCyclic")
         ))
-        graph.addNode(AbiReader.SourceFileAbi(
+        graph.updateOrAddNode(AbiReader.SourceFileAbi(
             className = "com/example/TwoCyclic",
             privateTypes = emptySet(),
             publicTypes = setOf("com/example/OneCyclic")
         ))
-        graph.addNode(AbiReader.SourceFileAbi(
+        graph.updateOrAddNode(AbiReader.SourceFileAbi(
             className = "com/example/ImplementsBaseInterface",
             privateTypes = setOf("com/example/ExtendsBase"),
             publicTypes = setOf("com/example/BaseInterface")
@@ -84,7 +104,7 @@ internal class AbiDependencyGraphTest {
 
     companion object {
         @JvmStatic
-        fun provideDeleteTestData(): Stream<Arguments> = Stream.of(
+        fun provideUpdateTestData(): Stream<Arguments> = Stream.of(
             Arguments.of(
                 "com/example/Base",
                 setOf("com/example/ExtendsBase", "com/example/ImplementsBaseInterface")
@@ -96,25 +116,13 @@ internal class AbiDependencyGraphTest {
             Arguments.of(
                 "com/example/OneCyclic",
                 setOf("com/example/TwoCyclic", "com/example/ExtendsBase", "com/example/ImplementsBaseInterface")
-            )
-        )
-
-        @JvmStatic
-        fun provideUpdateTestData(): Stream<Arguments> = Stream.of(
+            ),
             Arguments.of(
-                AbiReader.SourceFileAbi(
-                    "com/example/ImplementsBaseInterface",
-                    privateTypes = emptySet(),
-                    publicTypes = setOf("com/example/BaseInterface", "com/example/TwoCyclic")
-                ),
+                "com/example/ImplementsBaseInterface",
                 emptySet<String>()
             ),
             Arguments.of(
-                AbiReader.SourceFileAbi(
-                    "com/example/TwoCyclic",
-                    privateTypes = setOf("com/example/Base"),
-                    publicTypes = emptySet()
-                ),
+                "com/example/TwoCyclic",
                 setOf(
                     "com/example/OneCyclic",
                     "com/example/ExtendsBase",

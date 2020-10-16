@@ -13,49 +13,13 @@ internal class AbiDependencyGraph(
     private val graph: HashMap<ClassNode, MutableSet<AbiDependencyEdge>>
 ) {
 
-    fun addNode(classAbi: AbiReader.SourceFileAbi) {
-        val node = ClassNode(classAbi.className)
-        val edges = graph[node] ?: mutableSetOf()
-
-        require(edges.filterIsInstance<AbiDependencyEdge.IncomingEdge>().isEmpty()) {
-            "Failed to add, node for ${classAbi.className} is already exists"
-        }
-
-        fun createEdges(type: String, isPrivate: Boolean) {
-            edges.add(
-                AbiDependencyEdge.IncomingEdge(
-                    isPrivate = isPrivate,
-                    dependsOnClass = type
-                )
-            )
-
-            val dependsOnNode = ClassNode(type)
-            val dependsOnNodeEdges = graph[dependsOnNode] ?: mutableSetOf()
-
-            dependsOnNodeEdges.add(
-                AbiDependencyEdge.OutgoingEdge(
-                    isPrivate = isPrivate,
-                    dependentClass = classAbi.className
-                )
-            )
-            graph[dependsOnNode] = dependsOnNodeEdges
-        }
-
-        classAbi
-            .publicTypes
-            .forEach { createEdges(it, false) }
-        classAbi
-            .privateTypes
-            .forEach { createEdges(it, true) }
-
-        graph[node] = edges
-    }
-
-    fun updateNode(classAbi: AbiReader.SourceFileAbi): Set<String> {
+    fun updateOrAddNode(classAbi: AbiReader.SourceFileAbi) {
         val nodeDependencies = graph[ClassNode(classAbi.className)]
-
-        requireNotNull(nodeDependencies) {
-            "Failed to update, dependency graph does not contain a node for ${classAbi.className} class."
+        if (nodeDependencies == null ||
+            nodeDependencies.filterIsInstance<AbiDependencyEdge.IncomingEdge>().isEmpty()
+        ) {
+            addNewNode(classAbi)
+            return
         }
 
         val incomingDependencies = nodeDependencies.filterIsInstance<AbiDependencyEdge.IncomingEdge>()
@@ -120,19 +84,11 @@ internal class AbiDependencyGraph(
             }
 
         graph[ClassNode(classAbi.className)] = nodeDependencies
-
-        return nodeDependencies.detectClassesToRecompile(classAbi.className)
     }
 
-    fun deleteNode(className: String): Set<String> {
+    fun deleteNode(className: String) {
         val node = ClassNode(className)
-        val deleteNodeDependencies = graph[node]
-
-        requireNotNull(deleteNodeDependencies) {
-            "Failed to delete, dependency graph does not contain a node for $className class."
-        }
-
-        val classesToRecompile = deleteNodeDependencies.detectClassesToRecompile(className)
+        val deleteNodeDependencies = graph[node] ?: return
 
         deleteNodeDependencies
             .filterIsInstance<AbiDependencyEdge.OutgoingEdge>()
@@ -142,8 +98,13 @@ internal class AbiDependencyGraph(
                 }
             }
         graph.remove(node)
+    }
 
-        return classesToRecompile.toSet()
+    fun getClassesToRecompileOnClassChange(className: String): Set<String> {
+        val node = ClassNode(className)
+        val nodeDependencies = graph[node]
+
+        return nodeDependencies?.detectClassesToRecompile(className)?.toSet() ?: emptySet()
     }
 
     @OptIn(ExperimentalSerializationApi::class)
@@ -152,6 +113,44 @@ internal class AbiDependencyGraph(
             cacheFile,
             Cbor.encodeToByteArray(graph)
         )
+    }
+
+    private fun addNewNode(classAbi: AbiReader.SourceFileAbi) {
+        val node = ClassNode(classAbi.className)
+        val edges = graph[node] ?: mutableSetOf()
+
+        require(edges.filterIsInstance<AbiDependencyEdge.IncomingEdge>().isEmpty()) {
+            "Failed to add, node for ${classAbi.className} is already exists"
+        }
+
+        fun createEdges(type: String, isPrivate: Boolean) {
+            edges.add(
+                AbiDependencyEdge.IncomingEdge(
+                    isPrivate = isPrivate,
+                    dependsOnClass = type
+                )
+            )
+
+            val dependsOnNode = ClassNode(type)
+            val dependsOnNodeEdges = graph[dependsOnNode] ?: mutableSetOf()
+
+            dependsOnNodeEdges.add(
+                AbiDependencyEdge.OutgoingEdge(
+                    isPrivate = isPrivate,
+                    dependentClass = classAbi.className
+                )
+            )
+            graph[dependsOnNode] = dependsOnNodeEdges
+        }
+
+        classAbi
+            .publicTypes
+            .forEach { createEdges(it, false) }
+        classAbi
+            .privateTypes
+            .forEach { createEdges(it, true) }
+
+        graph[node] = edges
     }
 
     private fun Set<AbiDependencyEdge>.detectClassesToRecompile(
@@ -199,6 +198,21 @@ internal class AbiDependencyGraph(
             }
     }
 
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (javaClass != other?.javaClass) return false
+
+        other as AbiDependencyGraph
+
+        if (graph != other.graph) return false
+
+        return true
+    }
+
+    override fun hashCode(): Int {
+        return graph.hashCode()
+    }
+
     private data class DependencyToRecompile(
         val className: String,
         val dependentTypes: Set<String>
@@ -211,11 +225,13 @@ internal class AbiDependencyGraph(
 
     @Serializable
     internal sealed class AbiDependencyEdge {
+        @Serializable
         data class OutgoingEdge(
             val isPrivate: Boolean,
             val dependentClass: String
         ) : AbiDependencyEdge()
 
+        @Serializable
         data class IncomingEdge(
             val isPrivate: Boolean,
             val dependsOnClass: String
