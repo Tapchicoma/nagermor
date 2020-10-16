@@ -110,6 +110,13 @@ internal class AbiDependencyGraph(
         return Cbor.encodeToByteArray(graph)
     }
 
+    /**
+     * Clears graph from all nodes.
+     */
+    fun clear() {
+        graph.clear()
+    }
+
     private fun addNewNode(classAbi: AbiReader.SourceFileAbi) {
         val node = ClassNode(classAbi.className)
         val edges = graph[node] ?: mutableSetOf()
