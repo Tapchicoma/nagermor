@@ -6,7 +6,7 @@ import java.nio.file.Path
 /**
  * Provides content hashing.
  */
-internal interface HashHelper {
+interface HashHelper {
     /**
      * Return hash of [input] string.
      */
