@@ -6,7 +6,9 @@ import java.nio.file.Path
 /**
  * Parse java source file and get top level class/interface/enum/annotation name.
  */
-internal fun Path.getJavaSourceFileTopElementName(): String {
+internal fun Path.getJavaSourceFileTopElementName(
+    outputFormatter: (packageName: String?, className: String) -> String = classNameFormatter
+): String {
     val parsedSource = StaticJavaParser.parse(this)
 
     val packageDeclaration = parsedSource.packageDeclaration
@@ -41,7 +43,11 @@ internal fun Path.getJavaSourceFileTopElementName(): String {
         "Could not find class name for $this source file."
     }
 
-    return if (packageName.isNullOrBlank()) {
+    return outputFormatter(packageName, className)
+}
+
+internal val classNameFormatter: (packageName: String?, className: String) -> String = { packageName, className ->
+    if (packageName.isNullOrBlank()) {
         className
     } else {
         "$packageName.$className"

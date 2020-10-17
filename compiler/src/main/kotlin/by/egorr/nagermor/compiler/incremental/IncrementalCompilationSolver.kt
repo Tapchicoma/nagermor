@@ -36,7 +36,12 @@ class IncrementalCompilationSolver(
     fun sourceFileChanged(
         sourceFile: Path
     ): Set<Path> {
-        val className = sourceFile.getJavaSourceFileTopElementName()
+        val className = if (Files.exists(sourceFile)) {
+            sourceFile.getJavaSourceFileTopElementName()
+        } else {
+            // Source file was deleted, looking for it in the cache map
+            getDeletedSourceFileClassNameFromCache(sourceFile)
+        }
         return graph
             .getClassesToRecompileOnClassChange(className)
             .map {
@@ -63,11 +68,13 @@ class IncrementalCompilationSolver(
     }
 
     fun removeSourceFiles(
+        outputDir: Path,
         sourceFiles: Set<Path>
     ) {
         sourceFiles
-            .map { it.getJavaSourceFileTopElementName() }
+            .map { getDeletedSourceFileClassNameFromCache(it) }
             .forEach {
+                Files.deleteIfExists(outputDir.resolve("$it.$outputFileExtension"))
                 classToSourceFileMap.remove(it)
                 graph.deleteNode(it)
             }
@@ -97,6 +104,14 @@ class IncrementalCompilationSolver(
         graph.clear()
         classToSourceFileMap.clear()
         Files.deleteIfExists(incrementalCacheFile)
+    }
+
+    private fun getDeletedSourceFileClassNameFromCache(sourceFile: Path): String {
+        val deletedClassMap = classToSourceFileMap.filterValues { it == sourceFile }
+        check(deletedClassMap.size == 1) {
+            "Removed $sourceFile is not known for this compiler"
+        }
+        return deletedClassMap.keys.first()
     }
 
     @Serializable
