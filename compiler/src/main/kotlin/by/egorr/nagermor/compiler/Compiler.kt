@@ -99,6 +99,12 @@ class Compiler(
 
         if (debug) println("Recompiling following source files: $sourceFilesToRecompile")
 
+        if (sourceFilesToRecompile.isEmpty()) return removeSourcesAndExit(
+            sourceFilesWithState,
+            incrementalCompilationSolver,
+            outputDir
+        )
+
         val compiledClasses = sourceFilesWithState
             .filterNot { it.value == SourceFileState.REMOVED }
             .keys
@@ -136,6 +142,26 @@ class Compiler(
                 incrementalCompilationSolver.saveState()
             }
         }
+    }
+
+    private fun removeSourcesAndExit(
+        sourceFilesWithState: Map<Path, SourceFileState>,
+        incrementalCompilationSolver: IncrementalCompilationSolver,
+        outputDir: Path
+    ): Int {
+        val removedSourceFiles = sourceFilesWithState
+            .filterValues { it == SourceFileState.REMOVED }
+            .keys
+
+        if (removedSourceFiles.isNotEmpty()) {
+            incrementalCompilationSolver.removeSourceFiles(
+                outputDir,
+                removedSourceFiles
+            )
+            incrementalCompilationSolver.saveState()
+        }
+
+        return 0
     }
 
     enum class SourceFileState {
