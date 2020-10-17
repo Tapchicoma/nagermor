@@ -2,7 +2,6 @@ package by.egorr.nagermor.compiler.incremental
 
 import by.egorr.nagermor.abi.AbiReader
 import by.egorr.nagermor.abi.JavaAbiReader
-import com.github.javaparser.StaticJavaParser
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.cbor.Cbor
@@ -37,7 +36,7 @@ class IncrementalCompilationSolver(
     fun sourceFileChanged(
         sourceFile: Path
     ): Set<Path> {
-        val className = sourceFile.getSourceFileClassName()
+        val className = sourceFile.getJavaSourceFileTopElementName()
         return graph
             .getClassesToRecompileOnClassChange(className)
             .map {
@@ -53,7 +52,7 @@ class IncrementalCompilationSolver(
         sourceFiles: Set<Path>
     ) {
         sourceFiles
-            .associateWith { it.getSourceFileClassName() }
+            .associateWith { it.getJavaSourceFileTopElementName() }
             .mapValues {
                 classToSourceFileMap[it.value] = it.key
                 abiReader.parseSourceFileAbi(outputDir.resolve("${it.value}.$outputFileExtension"))
@@ -67,7 +66,7 @@ class IncrementalCompilationSolver(
         sourceFiles: Set<Path>
     ) {
         sourceFiles
-            .map { it.getSourceFileClassName() }
+            .map { it.getJavaSourceFileTopElementName() }
             .forEach {
                 classToSourceFileMap.remove(it)
                 graph.deleteNode(it)
@@ -105,46 +104,4 @@ class IncrementalCompilationSolver(
         val classToSourceFileMap: Map<String, String>,
         val graphSerializedData: ByteArray
     )
-
-    private fun Path.getSourceFileClassName(): String {
-        val parsedSource = StaticJavaParser.parse(this)
-
-        val packageDeclaration = parsedSource.packageDeclaration
-        val packageName = if (packageDeclaration.isPresent) {
-            packageDeclaration.get().nameAsString
-        } else {
-            null
-        }
-
-        val classFileName = fileName.toString().substringBeforeLast('.')
-        var className: String? = null
-
-        val classDeclaration = parsedSource.getClassByName(classFileName)
-        if (classDeclaration.isPresent) className = classDeclaration.get().nameAsString
-
-        if (className == null) {
-            val interfaceDeclaration = parsedSource.getInterfaceByName(classFileName)
-            if (interfaceDeclaration.isPresent) className = interfaceDeclaration.get().nameAsString
-        }
-
-        if (className == null) {
-            val enumDeclaration = parsedSource.getEnumByName(classFileName)
-            if (enumDeclaration.isPresent) className = enumDeclaration.get().nameAsString
-        }
-
-        if (className == null) {
-            val annotationDeclaration = parsedSource.getAnnotationDeclarationByName(classFileName)
-            if (annotationDeclaration.isPresent) className = annotationDeclaration.get().nameAsString
-        }
-
-        requireNotNull(className) {
-            "Could not find class name for $this source file."
-        }
-
-        return if (packageName.isNullOrBlank()) {
-            className
-        } else {
-            "$packageName.$className"
-        }.replace('.', '/')
-    }
 }
