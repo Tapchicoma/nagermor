@@ -7,13 +7,14 @@ import java.nio.file.Path
  */
 interface CompilerBackend {
     /**
-     * Perform [sourceFiles] compilation into [outputDir] using given [classPath].
+     * Perform [sourceFiles] compilation into [outputDir] using given [classPath] and optionally [compiledClassFiles].
      *
      * @return compiler exit code. `0` means compilation finished successfully.
      */
     fun compile(
         outputDir: Path,
-        classPath: List<Path>,
-        sourceFiles: List<Path>
+        classPath: Set<Path>,
+        compiledClassFiles: Set<Path>,
+        sourceFiles: Set<Path>
     ): Int
 }
