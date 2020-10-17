@@ -2,6 +2,9 @@ package by.egorr.nagermor.cli
 
 import by.egorr.nagermor.compiler.Compiler
 import by.egorr.nagermor.fscaching.FileSystemChangesDetector
+import by.egorr.nagermor.fscaching.hash.HashHelper
+import by.egorr.nagermor.fscaching.hash.HashHelper.Companion.toHex
+import by.egorr.nagermor.fscaching.hash.Sha256HashHelper
 import com.github.ajalt.clikt.core.CliktCommand
 import com.github.ajalt.clikt.parameters.arguments.argument
 import com.github.ajalt.clikt.parameters.options.default
@@ -9,6 +12,8 @@ import com.github.ajalt.clikt.parameters.options.flag
 import com.github.ajalt.clikt.parameters.options.option
 import com.github.ajalt.clikt.parameters.options.split
 import com.github.ajalt.clikt.parameters.types.file
+import java.nio.file.Files
+import java.nio.file.Path
 import java.nio.file.Paths
 import kotlin.system.exitProcess
 
@@ -46,13 +51,17 @@ private class Compile : CliktCommand() {
             canBeSymlink = false
         )
 
+    private val cacheDir = Paths.get(
+        System.getProperty("user.home"),
+        ".nagermor",
+        "caches",
+    )
+
+    private val hashHelper: HashHelper = Sha256HashHelper()
+
     private val fsChangesDetector = FileSystemChangesDetector(
-        Paths.get(
-            System.getProperty("user.home"),
-            ".nagermor",
-            "caches",
-            "filesystem"
-        )
+        cacheDir.resolve("filesystem"),
+        hashHelper
     )
 
     private val compiler by lazy { Compiler(debug = debug) }
@@ -82,9 +91,10 @@ private class Compile : CliktCommand() {
         }
 
         val result = compiler.compileSources(
-            classPath = classPath,
+            classPath = classPath.toSet(),
             isClassPathChanged = isClasspathChanged,
-            sourceDir = sourcesPath,
+            outputDir = sourcesPath.outputDir(),
+            incrementalCacheFile = sourcesPath.incrementalCacheFile(),
             sourceFilesWithState
         )
 
@@ -95,5 +105,18 @@ private class Compile : CliktCommand() {
 
     private fun debugEcho(message: String) {
         if (debug) echo(message)
+    }
+
+    private fun Path.outputDir() = resolveSibling("$fileName-output").apply {
+        if (!Files.exists(this)) Files.createDirectory(this)
+    }
+
+    private fun Path.incrementalCacheFile(): Path {
+        val incrementalCacheDir = cacheDir.resolve("incremental")
+        if (Files.notExists(incrementalCacheDir)) Files.createDirectories(incrementalCacheDir)
+
+        return incrementalCacheDir.resolve(
+            "${hashHelper.hashString(this.toString()).toHex()}.bin"
+        )
     }
 }

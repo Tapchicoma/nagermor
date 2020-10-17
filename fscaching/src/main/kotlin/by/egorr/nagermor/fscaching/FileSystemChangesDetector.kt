@@ -17,9 +17,9 @@ import java.nio.file.attribute.BasicFileAttributes
  * @param rootCachePath dir under which class should store caches between compilations
  */
 class FileSystemChangesDetector(
-    private val rootCachePath: Path
-) {
+    private val rootCachePath: Path,
     private val hashHelper: HashHelper = Sha256HashHelper()
+) {
 
     /**
      * Detect if [classpath] is the same as from previous compilation for given [sourcesPath].
@@ -52,7 +52,7 @@ class FileSystemChangesDetector(
      */
     fun getSourceStatus(
         sourcesPath: Path,
-        fileExtension: String = ".java"
+        fileExtension: String = "java"
     ): Map<Path, Compiler.SourceFileState> {
         val fileVisitor = SourcesFileVisitor(fileExtension)
         Files.walkFileTree(sourcesPath, fileVisitor)
@@ -147,8 +147,9 @@ class FileSystemChangesDetector(
     }
 
     private class SourcesFileVisitor(
-        private val fileExtension: String
+        fileExtension: String
     ) : SimpleFileVisitor<Path>() {
+        private val fileExtensionWithDot = ".$fileExtension"
         private val _sourceFiles = mutableListOf<Path>()
         val sourceFiles get() = _sourceFiles.toList()
 
@@ -156,7 +157,7 @@ class FileSystemChangesDetector(
             file: Path,
             attrs: BasicFileAttributes
         ): FileVisitResult {
-            return if (attrs.isRegularFile && !file.toString().endsWith(fileExtension)) {
+            return if (attrs.isRegularFile && !file.toString().endsWith(fileExtensionWithDot)) {
                 FileVisitResult.SKIP_SIBLINGS
             } else {
                 _sourceFiles.add(file)
