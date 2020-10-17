@@ -75,7 +75,7 @@ class JavaAbiReader : AbiReader {
             signature: String?,
             exceptions: Array<out String>?
         ): MethodVisitor? {
-            // TODO: Parse method internal types, annotations via MethodVisitor
+            // TODO: Parse method annotations via MethodVisitor
             writeTypes(access.isPrivate()) { types ->
                 types.add(Type.getMethodType(descriptor).returnType.className)
                 Type.getArgumentTypes(descriptor)?.forEach {
@@ -85,7 +85,9 @@ class JavaAbiReader : AbiReader {
                     types.add(it)
                 }
             }
-            return null
+            return JavaClassMethodVisitor(
+                privateTypes
+            )
         }
 
         override fun visitInnerClass(
@@ -116,5 +118,16 @@ class JavaAbiReader : AbiReader {
         }
 
         private fun Int.isPrivate(): Boolean = Modifier.isPrivate(this)
+    }
+
+    private class JavaClassMethodVisitor(
+        private val privateTypes: MutableSet<String>
+    ) : MethodVisitor(Opcodes.ASM9) {
+        override fun visitTypeInsn(
+            opcode: Int,
+            type: String
+        ) {
+            privateTypes.add(type)
+        }
     }
 }
