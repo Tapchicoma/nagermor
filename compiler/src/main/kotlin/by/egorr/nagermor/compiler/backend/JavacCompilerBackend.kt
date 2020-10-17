@@ -4,6 +4,7 @@ import by.egorr.nagermor.compiler.CompilerBackend
 import by.egorr.nagermor.compiler.deleteDirectoryWithContent
 import java.nio.file.Files
 import java.nio.file.Path
+import javax.tools.ToolProvider
 
 class JavacCompilerBackend : CompilerBackend {
     override fun compile(
@@ -12,9 +13,7 @@ class JavacCompilerBackend : CompilerBackend {
         compiledClassFiles: Set<Path>,
         sourceFiles: Set<Path>
     ): Int {
-        val commands = mutableListOf(
-            "javac"
-        )
+        val commands = mutableListOf<String>()
 
         val tempOutputDir = outputDir.resolve("tmp")
 
@@ -31,14 +30,14 @@ class JavacCompilerBackend : CompilerBackend {
             commands.add(it.toAbsolutePath().toString())
         }
 
-        val processBuilder = ProcessBuilder()
-            .command(commands)
-            .redirectOutput(ProcessBuilder.Redirect.INHERIT)
-            .redirectError(ProcessBuilder.Redirect.INHERIT)
-
-        val process = processBuilder.start()
+        val javacCompiler = ToolProvider.getSystemJavaCompiler()
         return try {
-            process.waitFor()
+            javacCompiler.run(
+                null,
+                null,
+                null,
+                *commands.toTypedArray()
+            )
         } finally {
             tempOutputDir.deleteDirectoryWithContent()
         }
