@@ -11,12 +11,13 @@ internal class FileSystemChangesDetectorTest {
     private val fs = Jimfs.newFileSystem()
     private val cacheDir = fs.getPath("/cache").apply { Files.createDirectories(this) }
     private val sourcesDir = fs.getPath("/sources").apply { Files.createDirectories(this) }
+    private val outputDir = fs.getPath("/output").apply { Files.createDirectories(this) }
 
     private val fileSystemChangesDetector = FileSystemChangesDetector(cacheDir)
 
     @Test
     internal fun `Should always return true if no previous compilation cache is stored`() {
-        val isChanged = fileSystemChangesDetector.isClassPathChanged(sourcesDir, emptyList())
+        val isChanged = fileSystemChangesDetector.isClassPathChanged(sourcesDir, outputDir, emptyList())
 
         assertEquals(true, isChanged)
     }
@@ -24,9 +25,9 @@ internal class FileSystemChangesDetectorTest {
     @Test
     internal fun `Should return false for next compilation with same classpath and sourcesDir`() {
         val classPath = testClassPath()
-        fileSystemChangesDetector.isClassPathChanged(sourcesDir, classPath)
+        fileSystemChangesDetector.isClassPathChanged(sourcesDir, outputDir, classPath)
 
-        val isChanged = fileSystemChangesDetector.isClassPathChanged(sourcesDir, classPath)
+        val isChanged = fileSystemChangesDetector.isClassPathChanged(sourcesDir, outputDir, classPath)
 
         assertEquals(
             false,
@@ -37,10 +38,10 @@ internal class FileSystemChangesDetectorTest {
     @Test
     internal fun `Should return true when classpath is the same, but sourcesDir is different`() {
         val classPath = testClassPath()
-        fileSystemChangesDetector.isClassPathChanged(sourcesDir, classPath)
+        fileSystemChangesDetector.isClassPathChanged(sourcesDir, outputDir, classPath)
         val anotherSourcesDir = fs.getPath("/sources2").apply { Files.createDirectories(this) }
 
-        val isChanged = fileSystemChangesDetector.isClassPathChanged(anotherSourcesDir, classPath)
+        val isChanged = fileSystemChangesDetector.isClassPathChanged(anotherSourcesDir, outputDir, classPath)
 
         assertEquals(
             true,
@@ -50,9 +51,13 @@ internal class FileSystemChangesDetectorTest {
 
     @Test
     internal fun `Should return true when classpath changes, but sourcesDir is the same`() {
-        fileSystemChangesDetector.isClassPathChanged(sourcesDir, testClassPath())
+        fileSystemChangesDetector.isClassPathChanged(sourcesDir, outputDir, testClassPath())
 
-        val isChanged = fileSystemChangesDetector.isClassPathChanged(sourcesDir, testClassPath("/classpath2"))
+        val isChanged = fileSystemChangesDetector.isClassPathChanged(
+            sourcesDir,
+            outputDir,
+            testClassPath("/classpath2")
+        )
 
         assertEquals(
             true,
@@ -63,10 +68,10 @@ internal class FileSystemChangesDetectorTest {
     @Test
     internal fun `Should return true when content of one of classpath file changes`() {
         val testClassPath = testClassPath()
-        fileSystemChangesDetector.isClassPathChanged(sourcesDir, testClassPath)
+        fileSystemChangesDetector.isClassPathChanged(sourcesDir, outputDir, testClassPath)
         Files.write(testClassPath[0], "new content".toByteArray())
 
-        val isChanged = fileSystemChangesDetector.isClassPathChanged(sourcesDir, testClassPath)
+        val isChanged = fileSystemChangesDetector.isClassPathChanged(sourcesDir, outputDir, testClassPath)
 
         assertEquals(
             true,
@@ -77,7 +82,7 @@ internal class FileSystemChangesDetectorTest {
     @Test
     internal fun `Should return all source files as added on first run`() {
         val allFiles = sourcesDir.initialSources()
-        val sources = fileSystemChangesDetector.getSourceStatus(sourcesDir)
+        val sources = fileSystemChangesDetector.getSourceStatus(sourcesDir, outputDir)
         val expected = allFiles
             .filter { it.toString().endsWith(".java") }
             .associateWith { Compiler.SourceFileState.ADDED }
@@ -91,8 +96,8 @@ internal class FileSystemChangesDetectorTest {
     @Test
     internal fun `Should return all source files are not changed on the second run over same sources`() {
         val allFiles = sourcesDir.initialSources()
-        fileSystemChangesDetector.getSourceStatus(sourcesDir)
-        val sources = fileSystemChangesDetector.getSourceStatus(sourcesDir)
+        fileSystemChangesDetector.getSourceStatus(sourcesDir, outputDir)
+        val sources = fileSystemChangesDetector.getSourceStatus(sourcesDir, outputDir)
 
         val expected = allFiles
             .filter { it.toString().endsWith(".java") }
@@ -105,11 +110,29 @@ internal class FileSystemChangesDetectorTest {
     }
 
     @Test
+    internal fun `Should return all same source files as added when output dir is changed`() {
+        val anotherOutputDir = fs.getPath("/output2").apply { Files.createDirectories(this) }
+        val allFiles = sourcesDir.initialSources()
+        fileSystemChangesDetector.getSourceStatus(sourcesDir, outputDir)
+
+        val sources = fileSystemChangesDetector.getSourceStatus(sourcesDir, anotherOutputDir)
+
+        val expected = allFiles
+            .filter { it.toString().endsWith(".java") }
+            .associateWith { Compiler.SourceFileState.ADDED }
+
+        assertEquals(
+            expected,
+            sources
+        )
+    }
+
+    @Test
     internal fun `Should indicate some file is change if content of this source file was changed`() {
         val allFiles = sourcesDir.initialSources()
-        fileSystemChangesDetector.getSourceStatus(sourcesDir)
+        fileSystemChangesDetector.getSourceStatus(sourcesDir, outputDir)
         Files.write(allFiles[1], "class Changed1();".toByteArray())
-        val sources = fileSystemChangesDetector.getSourceStatus(sourcesDir)
+        val sources = fileSystemChangesDetector.getSourceStatus(sourcesDir, outputDir)
 
         val expected = allFiles
             .filter { it.toString().endsWith(".java") }
@@ -130,10 +153,10 @@ internal class FileSystemChangesDetectorTest {
     @Test
     internal fun `Should differentiate caching between different source dirs`() {
         sourcesDir.initialSources()
-        fileSystemChangesDetector.getSourceStatus(sourcesDir)
+        fileSystemChangesDetector.getSourceStatus(sourcesDir, outputDir)
         val sourceDir2 = fs.getPath("/sources2")
         val allFiles = sourceDir2.initialSources()
-        val sources = fileSystemChangesDetector.getSourceStatus(sourceDir2)
+        val sources = fileSystemChangesDetector.getSourceStatus(sourceDir2, outputDir)
 
         val expected = allFiles
             .filter { it.toString().endsWith(".java") }
@@ -150,10 +173,10 @@ internal class FileSystemChangesDetectorTest {
     @Test
     internal fun `Should mark source file as deleted`() {
         val allFiles = sourcesDir.initialSources()
-        fileSystemChangesDetector.getSourceStatus(sourcesDir)
+        fileSystemChangesDetector.getSourceStatus(sourcesDir, outputDir)
 
         Files.delete(allFiles.last())
-        val sources = fileSystemChangesDetector.getSourceStatus(sourcesDir)
+        val sources = fileSystemChangesDetector.getSourceStatus(sourcesDir, outputDir)
 
         val expected = allFiles
             .filter { it.toString().endsWith(".java") }
@@ -174,10 +197,10 @@ internal class FileSystemChangesDetectorTest {
     @Test
     internal fun `Should mark classpath is changed after clearing cache`() {
         val classPath = testClassPath()
-        fileSystemChangesDetector.isClassPathChanged(sourcesDir, classPath)
-        fileSystemChangesDetector.clearCache(sourcesDir)
+        fileSystemChangesDetector.isClassPathChanged(sourcesDir, outputDir, classPath)
+        fileSystemChangesDetector.clearCache(sourcesDir, outputDir)
 
-        val isChanged = fileSystemChangesDetector.isClassPathChanged(sourcesDir, classPath)
+        val isChanged = fileSystemChangesDetector.isClassPathChanged(sourcesDir, outputDir, classPath)
 
         assertEquals(
             true,

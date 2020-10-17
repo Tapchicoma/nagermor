@@ -26,9 +26,10 @@ class FileSystemChangesDetector(
      */
     fun isClassPathChanged(
         sourcesPath: Path,
+        outputPath: Path,
         classpath: List<Path>
     ): Boolean {
-        val classpathHashFile = sourcesPath.classPathHashFile()
+        val classpathHashFile = classPathHashFile(sourcesPath, outputPath)
 
         val currentClassPathHash = hashHelper.hashString(
             classpath.joinToString {
@@ -52,12 +53,13 @@ class FileSystemChangesDetector(
      */
     fun getSourceStatus(
         sourcesPath: Path,
+        outputPath: Path,
         fileExtension: String = "java"
     ): Map<Path, Compiler.SourceFileState> {
         val fileVisitor = SourcesFileVisitor(fileExtension)
         Files.walkFileTree(sourcesPath, fileVisitor)
 
-        val cacheFile = sourcesPath.sourcesHashFile()
+        val cacheFile = sourcesHashFile(sourcesPath, outputPath)
 
         val previousCompilationSourceFilesHashes = cacheFile.readSourceFilesCache().toMutableMap()
         val sourceFilesHashes = fileVisitor.sourceFiles.associateWith { hashHelper.hashFile(it) }
@@ -94,32 +96,50 @@ class FileSystemChangesDetector(
     }
 
     /**
-     * Clears previous compilation caches for given [sourceDir].
+     * Clears previous compilation caches for given [sourcePath].
      */
-    fun clearCache(sourceDir: Path) {
-        Files.deleteIfExists(sourceDir.classPathHashFile())
-        Files.deleteIfExists(sourceDir.sourcesHashFile())
+    fun clearCache(
+        sourcePath: Path,
+        outputPath: Path
+    ) {
+        Files.deleteIfExists(classPathHashFile(sourcePath, outputPath))
+        Files.deleteIfExists(sourcesHashFile(sourcePath, outputPath))
     }
 
-    private fun Path.classPathHashFile(): Path = sourcesCacheDir().resolve("classpath_hash.bin").apply {
-        if (!Files.exists(this)) {
-            Files.createFile(this)
+    private fun classPathHashFile(
+        sourcesPath: Path,
+        outputPath: Path
+    ): Path = sourcesCacheDir(sourcesPath, outputPath)
+        .resolve("classpath_hash.bin")
+        .apply {
+            if (!Files.exists(this)) {
+                Files.createFile(this)
+            }
         }
-    }
 
-    private fun Path.sourcesHashFile(): Path = sourcesCacheDir().resolve("sources_hash.bin").apply {
-        if (!Files.exists(this)) {
-            Files.createFile(this)
+    private fun sourcesHashFile(
+        sourcesPath: Path,
+        outputPath: Path
+    ): Path = sourcesCacheDir(sourcesPath, outputPath)
+        .resolve("sources_hash.bin")
+        .apply {
+            if (!Files.exists(this)) {
+                Files.createFile(this)
+            }
         }
-    }
 
-    private fun Path.sourcesCacheDir() = rootCachePath.resolve(
-        hashHelper.hashString(toAbsolutePath().toString()).toHex()
-    ).apply {
-        if (!Files.exists(this)) {
-            Files.createDirectories(this)
+    private fun sourcesCacheDir(
+        sourcesPath: Path,
+        outputPath: Path
+    ) = rootCachePath
+        .resolve(
+            hashHelper.hashString("${sourcesPath.toAbsolutePath()}${outputPath.toAbsolutePath()}").toHex()
+        )
+        .apply {
+            if (!Files.exists(this)) {
+                Files.createDirectories(this)
+            }
         }
-    }
 
     private fun Path.readSourceFilesCache(): Map<Path, ByteArray> {
         if (!Files.exists(this)) return emptyMap()

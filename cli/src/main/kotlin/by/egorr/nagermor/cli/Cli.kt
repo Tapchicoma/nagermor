@@ -41,6 +41,16 @@ private class Compile : CliktCommand() {
     )
         .flag()
 
+    private val outputDir by option(
+        "--output", "-o",
+        help = "Provide non-default output directory to put compiled sources"
+    )
+        .file(
+            mustExist = true,
+            canBeFile = false,
+            canBeSymlink = false
+        )
+
     private val sourcesDir by argument(
         name = "path_to_sources",
         help = "Provide path to sources files"
@@ -71,15 +81,18 @@ private class Compile : CliktCommand() {
         debugEcho("Provided path to sources files: $sourcesDir")
 
         val sourcesPath = sourcesDir.toPath()
-
         val classPath = classpath.map { it.toPath() }
+        val outputPath = outputDir?.toPath() ?: sourcesPath.defaultOutputPath()
+        val incrementalCacheFile = incrementalCacheFile(sourcesPath, outputPath)
+
         val isClasspathChanged = fsChangesDetector.isClassPathChanged(
             sourcesPath,
+            outputPath,
             classPath
         )
         debugEcho("Provided classpath is changed since previous compilation: $isClasspathChanged")
 
-        val sourceFilesWithState = fsChangesDetector.getSourceStatus(sourcesPath)
+        val sourceFilesWithState = fsChangesDetector.getSourceStatus(sourcesPath, outputPath)
         debugEcho("Found following source files: $sourceFilesWithState")
 
         if (sourceFilesWithState.isEmpty()) {
@@ -93,12 +106,12 @@ private class Compile : CliktCommand() {
         val result = compiler.compileSources(
             classPath = classPath.toSet(),
             isClassPathChanged = isClasspathChanged,
-            outputDir = sourcesPath.outputDir(),
-            incrementalCacheFile = sourcesPath.incrementalCacheFile(),
+            outputDir = outputPath,
+            incrementalCacheFile = incrementalCacheFile,
             sourceFilesWithState
         )
 
-        if (result != 0) fsChangesDetector.clearCache(sourcesPath)
+        if (result != 0) fsChangesDetector.clearCache(sourcesPath, outputPath)
 
         exitProcess(result)
     }
@@ -107,16 +120,19 @@ private class Compile : CliktCommand() {
         if (debug) echo(message)
     }
 
-    private fun Path.outputDir() = resolveSibling("$fileName-output").apply {
+    private fun Path.defaultOutputPath() = resolveSibling("$fileName-output").apply {
         if (!Files.exists(this)) Files.createDirectory(this)
     }
 
-    private fun Path.incrementalCacheFile(): Path {
+    private fun incrementalCacheFile(
+        sourcesPath: Path,
+        outputPath: Path
+    ): Path {
         val incrementalCacheDir = cacheDir.resolve("incremental")
         if (Files.notExists(incrementalCacheDir)) Files.createDirectories(incrementalCacheDir)
 
         return incrementalCacheDir.resolve(
-            "${hashHelper.hashString(this.toString()).toHex()}.bin"
+            "${hashHelper.hashString("$sourcesPath$outputPath").toHex()}.bin"
         )
     }
 }
