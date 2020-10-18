@@ -111,7 +111,7 @@ private class Compile : CliktCommand() {
             sourceFilesWithState
         )
 
-        if (result != 0) fsChangesDetector.clearCache(sourcesPath, outputPath)
+        if (result == 0) fsChangesDetector.saveState(sourcesPath, outputPath)
 
         exitProcess(result)
     }

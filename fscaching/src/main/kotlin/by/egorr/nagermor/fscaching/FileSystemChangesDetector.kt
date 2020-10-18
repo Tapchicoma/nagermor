@@ -20,6 +20,8 @@ class FileSystemChangesDetector(
     private val rootCachePath: Path,
     private val hashHelper: HashHelper = Sha256HashHelper()
 ) {
+    private var computedClassPathHash: ByteArray? = null
+    private var computedSourcesHashes: Map<Path, ByteArray>? = null
 
     /**
      * Detect if [classpath] is the same as from previous compilation for given [sourcesPath].
@@ -31,20 +33,15 @@ class FileSystemChangesDetector(
     ): Boolean {
         val classpathHashFile = classPathHashFile(sourcesPath, outputPath)
 
-        val currentClassPathHash = hashHelper.hashString(
+        computedClassPathHash = hashHelper.hashString(
             classpath.joinToString {
                 hashHelper.hashFile(it).toHex()
             }
         )
 
         val previousCompilationClassPathHash = Files.readAllBytes(classpathHashFile)
-        return if (previousCompilationClassPathHash.isNotEmpty() &&
-            currentClassPathHash.contentEquals(previousCompilationClassPathHash)) {
-            false
-        } else {
-            Files.write(classpathHashFile, currentClassPathHash)
-            true
-        }
+        return previousCompilationClassPathHash.isEmpty() ||
+            !computedClassPathHash.contentEquals(previousCompilationClassPathHash)
     }
 
     /**
@@ -63,6 +60,7 @@ class FileSystemChangesDetector(
 
         val previousCompilationSourceFilesHashes = cacheFile.readSourceFilesCache().toMutableMap()
         val sourceFilesHashes = fileVisitor.sourceFiles.associateWith { hashHelper.hashFile(it) }
+        computedSourcesHashes = sourceFilesHashes
 
         val result = sourceFilesHashes
             .mapValues { entry ->
@@ -88,10 +86,6 @@ class FileSystemChangesDetector(
             )
         }
 
-        if (result.values.filterNot { it == Compiler.SourceFileState.NOT_CHANGED }.isNotEmpty()) {
-            cacheFile.writeSourceFilesCache(sourceFilesHashes)
-        }
-
         return result.toMap()
     }
 
@@ -104,6 +98,21 @@ class FileSystemChangesDetector(
     ) {
         Files.deleteIfExists(classPathHashFile(sourcePath, outputPath))
         Files.deleteIfExists(sourcesHashFile(sourcePath, outputPath))
+    }
+
+    /**
+     * Save current calculated state into cache files.
+     *
+     * Should be called either after [isClassPathChanged], or [getSourceStatus], or after both.
+     */
+    fun saveState(
+        sourcesPath: Path,
+        outputPath: Path
+    ) {
+        computedClassPathHash?.run { Files.write(classPathHashFile(sourcesPath, outputPath), this)}
+        computedSourcesHashes?.run {
+            sourcesHashFile(sourcesPath, outputPath).writeSourceFilesCache(this)
+        }
     }
 
     private fun classPathHashFile(

@@ -26,6 +26,7 @@ internal class FileSystemChangesDetectorTest {
     internal fun `Should return false for next compilation with same classpath and sourcesDir`() {
         val classPath = testClassPath()
         fileSystemChangesDetector.isClassPathChanged(sourcesDir, outputDir, classPath)
+        fileSystemChangesDetector.saveState(sourcesDir, outputDir)
 
         val isChanged = fileSystemChangesDetector.isClassPathChanged(sourcesDir, outputDir, classPath)
 
@@ -97,6 +98,7 @@ internal class FileSystemChangesDetectorTest {
     internal fun `Should return all source files are not changed on the second run over same sources`() {
         val allFiles = sourcesDir.initialSources()
         fileSystemChangesDetector.getSourceStatus(sourcesDir, outputDir)
+        fileSystemChangesDetector.saveState(sourcesDir, outputDir)
         val sources = fileSystemChangesDetector.getSourceStatus(sourcesDir, outputDir)
 
         val expected = allFiles
@@ -131,6 +133,7 @@ internal class FileSystemChangesDetectorTest {
     internal fun `Should indicate some file is change if content of this source file was changed`() {
         val allFiles = sourcesDir.initialSources()
         fileSystemChangesDetector.getSourceStatus(sourcesDir, outputDir)
+        fileSystemChangesDetector.saveState(sourcesDir, outputDir)
         Files.write(allFiles[1], "class Changed1();".toByteArray())
         val sources = fileSystemChangesDetector.getSourceStatus(sourcesDir, outputDir)
 
@@ -174,6 +177,7 @@ internal class FileSystemChangesDetectorTest {
     internal fun `Should mark source file as deleted`() {
         val allFiles = sourcesDir.initialSources()
         fileSystemChangesDetector.getSourceStatus(sourcesDir, outputDir)
+        fileSystemChangesDetector.saveState(sourcesDir, outputDir)
 
         Files.delete(allFiles.last())
         val sources = fileSystemChangesDetector.getSourceStatus(sourcesDir, outputDir)
