@@ -105,7 +105,7 @@ private class Compile : CliktCommand() {
 
         val result = compiler.compileSources(
             classPath = classPath.toSet(),
-            isClassPathChanged = isClasspathChanged,
+            shouldRecompileAll = isClasspathChanged,
             outputDir = outputPath,
             incrementalCacheFile = incrementalCacheFile,
             sourceFilesWithState

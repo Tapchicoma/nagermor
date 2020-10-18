@@ -25,7 +25,7 @@ class Compiler(
      */
     fun compileSources(
         classPath: Set<Path>,
-        isClassPathChanged: Boolean,
+        shouldRecompileAll: Boolean,
         outputDir: Path,
         incrementalCacheFile: Path,
         sourceFilesWithState: Map<Path, SourceFileState>
@@ -37,7 +37,7 @@ class Compiler(
         )
 
         return when {
-            isClassPathChanged -> doFullRecompilation(
+            shouldRecompileAll -> doFullRecompilation(
                 outputDir,
                 classPath,
                 sourceFilesWithState,
