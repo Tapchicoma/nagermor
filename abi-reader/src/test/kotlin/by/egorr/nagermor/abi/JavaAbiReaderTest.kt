@@ -125,6 +125,68 @@ internal class JavaAbiReaderTest {
         )
     }
 
+    @Test
+    internal fun `Should parse correctly annotation`() {
+        val classAbi = abiReader.parseSourceFileAbi(
+            getTestJavaClass("by/egorr/test/annotations/TestAnnotation.class")
+        )
+
+        assertEquals(
+            "by/egorr/test/annotations/TestAnnotation",
+            classAbi.className
+        )
+        assertEquals(
+            setOf(
+                "java/lang/Object",
+                "java/lang/annotation/Annotation",
+                "java/lang/annotation/Retention",
+                "java/lang/annotation/RetentionPolicy",
+                "java/lang/String",
+            ),
+            classAbi.publicTypes
+        )
+        assertTrue(classAbi.privateTypes.isEmpty())
+    }
+
+    @Test
+    internal fun `Should parse method annotations`() {
+        val classAbi = abiReader.parseSourceFileAbi(
+            getTestJavaClass("by/egorr/test/annotations/MethodWithAnnotation.class")
+        )
+
+        assertTrue {
+            classAbi.publicTypes.contains(
+                "by/egorr/test/annotations/TestAnnotation"
+            )
+        }
+    }
+
+    @Test
+    internal fun `Should parse field annotations`() {
+        val classAbi = abiReader.parseSourceFileAbi(
+            getTestJavaClass("by/egorr/test/annotations/FieldWithAnnotation.class")
+        )
+
+        assertTrue {
+            classAbi.publicTypes.contains(
+                "by/egorr/test/annotations/TestAnnotation"
+            )
+        }
+    }
+
+    @Test
+    internal fun `Should parse type annotation`() {
+        val classAbi = abiReader.parseSourceFileAbi(
+            getTestJavaClass("by/egorr/test/annotations/ConstructorWithTypeAnnotation.class")
+        )
+
+        assertTrue {
+            classAbi.publicTypes.contains(
+                "by/egorr/test/annotations/TestTypeAnnotation"
+            )
+        }
+    }
+
     private fun getTestJavaClass(
         name: String
     ): Path = Paths.get(this::class.java.classLoader.getResource("java-source-output/$name")!!.toURI())

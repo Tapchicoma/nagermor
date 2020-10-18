@@ -1,11 +1,13 @@
 package by.egorr.nagermor.abi
 
+import org.objectweb.asm.AnnotationVisitor
 import org.objectweb.asm.ClassReader
 import org.objectweb.asm.ClassVisitor
 import org.objectweb.asm.FieldVisitor
 import org.objectweb.asm.MethodVisitor
 import org.objectweb.asm.Opcodes
 import org.objectweb.asm.Type
+import org.objectweb.asm.TypePath
 import java.lang.reflect.Modifier
 import java.nio.file.Files
 import java.nio.file.Path
@@ -15,26 +17,61 @@ class JavaAbiReader : AbiReader {
     override fun parseSourceFileAbi(
         compiledSourceFile: Path
     ): AbiReader.SourceFileAbi {
-        val classVisitor = JavaClassVisitor()
+        val collector = Collector()
+        val classVisitor = JavaClassVisitor(collector)
         val classReader = ClassReader(Files.newInputStream(compiledSourceFile))
         classReader.accept(classVisitor, 0)
 
-        val publicTypes = classVisitor.publicTypes.toSet()
-        val privateTypes = classVisitor.privateTypes.subtract(publicTypes).toSet()
+        val publicTypes = collector.publicTypes.toSet()
+        val privateTypes = collector.privateTypes.subtract(publicTypes).toSet()
 
         return AbiReader.SourceFileAbi(
             className = classVisitor.className,
-            sourceFileName = classVisitor.sourceFileName,
+            sourceFileName = collector.sourceFileName,
             privateTypes = privateTypes,
             publicTypes = publicTypes
         )
     }
 
-    private class JavaClassVisitor : ClassVisitor(Opcodes.ASM9) {
+    private class Collector {
+        private val _publicTypes = mutableSetOf<String>()
+        val publicTypes: Set<String> get() = _publicTypes.toSet()
+
+        private val _privateTypes = mutableSetOf<String>()
+        val privateTypes: Set<String> get() = _privateTypes.toSet()
+
         var sourceFileName: String? = null
+
+        fun addType(
+            access: Int,
+            block: (MutableSet<String>) -> Unit
+        ) = addType(isPrivateAccess(access), block)
+
+        fun addType(
+            isPrivate: Boolean,
+            block: (MutableSet<String>) -> Unit
+        ) {
+            if (isPrivate) {
+                block(_privateTypes)
+            } else {
+                block(_publicTypes)
+            }
+        }
+
+        fun isPrivateAccess(
+            access: Int
+        ): Boolean = Modifier.isPrivate(access)
+
+        fun getObjectInternalName(
+            descriptor: String
+        ): String = Type.getType(descriptor).internalName
+    }
+
+    private class JavaClassVisitor(
+        private val collector: Collector
+    ) : ClassVisitor(Opcodes.ASM9) {
+        private var isClassPrivate: Boolean = true
         lateinit var className: String
-        val publicTypes = mutableSetOf<String>()
-        val privateTypes = mutableSetOf<String>()
 
         override fun visit(
             version: Int,
@@ -45,13 +82,47 @@ class JavaAbiReader : AbiReader {
             interfaces: Array<out String>?
         ) {
             className = name
-            writeTypes(access.isPrivate()) { types ->
+            isClassPrivate = collector.isPrivateAccess(access)
+            collector.addType(access) { types ->
                 if (superName != null) types.add(superName)
 
                 interfaces?.forEach {
                     types.add(it)
                 }
             }
+        }
+
+        override fun visitAnnotation(
+            descriptor: String,
+            visible: Boolean
+        ): AnnotationVisitor? {
+            if (visible) {
+                collector.addType(isClassPrivate) {
+                    it.add(collector.getObjectInternalName(descriptor))
+                }
+            }
+
+            return JavaClassAnnotationVisitor(
+                collector,
+                isClassPrivate
+            )
+        }
+
+        override fun visitTypeAnnotation(
+            typeRef: Int,
+            typePath: TypePath?,
+            descriptor: String,
+            visible: Boolean
+        ): AnnotationVisitor? {
+            if (visible) {
+                collector.addType(isClassPrivate) {
+                    it.add(collector.getObjectInternalName(descriptor))
+                }
+            }
+            return JavaClassAnnotationVisitor(
+                collector,
+                isClassPrivate
+            )
         }
 
         override fun visitField(
@@ -61,11 +132,14 @@ class JavaAbiReader : AbiReader {
             signature: String?,
             value: Any?
         ): FieldVisitor? {
-            // TODO: Parse field annotations via FieldVisitor
-            writeTypes(access.isPrivate()) {
-                it.add(Type.getType(descriptor).className)
+            collector.addType(access) {
+                it.add(collector.getObjectInternalName(descriptor))
             }
-            return null
+
+            return JavaClassFieldVisitor(
+                collector,
+                collector.isPrivateAccess(access)
+            )
         }
 
         override fun visitMethod(
@@ -75,18 +149,19 @@ class JavaAbiReader : AbiReader {
             signature: String?,
             exceptions: Array<out String>?
         ): MethodVisitor? {
-            // TODO: Parse method annotations via MethodVisitor
-            writeTypes(access.isPrivate()) { types ->
-                types.add(Type.getMethodType(descriptor).returnType.className)
+            collector.addType(access) { types ->
+                types.add(Type.getMethodType(descriptor).returnType.internalName)
                 Type.getArgumentTypes(descriptor)?.forEach {
-                    types.add(it.className)
+                    types.add(it.internalName)
                 }
                 exceptions?.forEach {
                     types.add(it)
                 }
             }
+
             return JavaClassMethodVisitor(
-                privateTypes
+                collector,
+                collector.isPrivateAccess(access)
             )
         }
 
@@ -103,31 +178,143 @@ class JavaAbiReader : AbiReader {
             source: String?,
             debug: String?
         ) {
-            sourceFileName = source
+            collector.sourceFileName = source
         }
-
-        private inline fun writeTypes(
-            isPrivate: Boolean,
-            block: (MutableSet<String>) -> Unit
-        ) {
-            if (isPrivate) {
-                block(privateTypes)
-            } else {
-                block(publicTypes)
-            }
-        }
-
-        private fun Int.isPrivate(): Boolean = Modifier.isPrivate(this)
     }
 
     private class JavaClassMethodVisitor(
-        private val privateTypes: MutableSet<String>
+        private val collector: Collector,
+        private val isMethodPrivate: Boolean
     ) : MethodVisitor(Opcodes.ASM9) {
+
+        override fun visitAnnotation(
+            descriptor: String,
+            visible: Boolean
+        ): AnnotationVisitor? {
+            if (visible) {
+                collector.addType(isMethodPrivate) {
+                    it.add(collector.getObjectInternalName(descriptor))
+                }
+            }
+            return JavaClassAnnotationVisitor(
+                collector,
+                isMethodPrivate
+            )
+        }
+
+        override fun visitTypeAnnotation(
+            typeRef: Int,
+            typePath: TypePath?,
+            descriptor: String,
+            visible: Boolean
+        ): AnnotationVisitor {
+            if (visible) {
+                collector.addType(isMethodPrivate) {
+                    it.add(collector.getObjectInternalName(descriptor))
+                }
+            }
+
+            return JavaClassAnnotationVisitor(
+                collector,
+                isMethodPrivate
+            )
+        }
+
+        override fun visitParameterAnnotation(
+            parameter: Int,
+            descriptor: String,
+            visible: Boolean
+        ): AnnotationVisitor {
+            if (visible) {
+                collector.addType(isMethodPrivate) {
+                    it.add(collector.getObjectInternalName(descriptor))
+                }
+            }
+
+            return JavaClassAnnotationVisitor(
+                collector,
+                isMethodPrivate
+            )
+        }
+
         override fun visitTypeInsn(
             opcode: Int,
             type: String
         ) {
-            privateTypes.add(type)
+            collector.addType(true) {
+                it.add(type)
+            }
+        }
+    }
+
+    private class JavaClassFieldVisitor(
+        private val collector: Collector,
+        private val isFieldPrivate: Boolean
+    ) : FieldVisitor(Opcodes.ASM9) {
+        override fun visitAnnotation(
+            descriptor: String,
+            visible: Boolean
+        ): AnnotationVisitor? {
+            if (visible) {
+                collector.addType(isFieldPrivate) {
+                    it.add(collector.getObjectInternalName(descriptor))
+                }
+            }
+            return JavaClassAnnotationVisitor(
+                collector,
+                isFieldPrivate
+            )
+        }
+
+        override fun visitTypeAnnotation(
+            typeRef: Int,
+            typePath: TypePath?,
+            descriptor: String,
+            visible: Boolean
+        ): AnnotationVisitor? {
+            if (visible) {
+                collector.addType(isFieldPrivate) {
+                    it.add(collector.getObjectInternalName(descriptor))
+                }
+            }
+
+            return JavaClassAnnotationVisitor(
+                collector,
+                isFieldPrivate
+            )
+        }
+    }
+
+    private class JavaClassAnnotationVisitor(
+        private val collector: Collector,
+        private val isPrivate: Boolean
+    ) : AnnotationVisitor(Opcodes.ASM9) {
+
+        override fun visitEnum(
+            name: String?,
+            descriptor: String,
+            value: String
+        ) {
+            collector.addType(isPrivate) {
+                it.add(collector.getObjectInternalName(descriptor))
+            }
+        }
+
+        override fun visitAnnotation(
+            name: String,
+            descriptor: String
+        ): AnnotationVisitor? {
+            collector.addType(isPrivate) {
+                it.add(collector.getObjectInternalName(descriptor))
+            }
+
+            return JavaClassAnnotationVisitor(collector, isPrivate)
+        }
+
+        override fun visitArray(
+            name: String
+        ): AnnotationVisitor? {
+            return JavaClassAnnotationVisitor(collector, isPrivate)
         }
     }
 }
