@@ -8,6 +8,7 @@ Includes both CLI tool and sample gradle plugin.
 
 Currently implementation misses support for following Java features:
 - Java 9+ modules
+- Tracking changes in jvm version
 
 ### CLI tool
 
