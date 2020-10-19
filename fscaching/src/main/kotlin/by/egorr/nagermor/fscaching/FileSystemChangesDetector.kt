@@ -4,7 +4,10 @@ import by.egorr.nagermor.compiler.Compiler
 import by.egorr.nagermor.fscaching.hash.HashHelper
 import by.egorr.nagermor.fscaching.hash.HashHelper.Companion.toHex
 import by.egorr.nagermor.fscaching.hash.Sha256HashHelper
-import org.apache.commons.codec.binary.Base64
+import kotlinx.serialization.ExperimentalSerializationApi
+import kotlinx.serialization.cbor.Cbor
+import kotlinx.serialization.decodeFromByteArray
+import kotlinx.serialization.encodeToByteArray
 import java.nio.file.FileVisitResult
 import java.nio.file.Files
 import java.nio.file.Path
@@ -39,7 +42,12 @@ class FileSystemChangesDetector(
             }
         )
 
-        val previousCompilationClassPathHash = Files.readAllBytes(classpathHashFile)
+        val previousCompilationClassPathHash = if (Files.exists(classpathHashFile)) {
+            Files.readAllBytes(classpathHashFile)
+        } else {
+            ByteArray(0)
+        }
+
         return previousCompilationClassPathHash.isEmpty() ||
             !computedClassPathHash.contentEquals(previousCompilationClassPathHash)
     }
@@ -109,7 +117,11 @@ class FileSystemChangesDetector(
         sourcesPath: Path,
         outputPath: Path
     ) {
-        computedClassPathHash?.run { Files.write(classPathHashFile(sourcesPath, outputPath), this)}
+        computedClassPathHash?.run {
+            val cacheFile = classPathHashFile(sourcesPath, outputPath)
+            if (Files.notExists(cacheFile)) Files.createFile(cacheFile)
+            Files.write(cacheFile, this)
+        }
         computedSourcesHashes?.run {
             sourcesHashFile(sourcesPath, outputPath).writeSourceFilesCache(this)
         }
@@ -131,11 +143,6 @@ class FileSystemChangesDetector(
         outputPath: Path
     ): Path = sourcesCacheDir(sourcesPath, outputPath)
         .resolve("sources_hash.bin")
-        .apply {
-            if (!Files.exists(this)) {
-                Files.createFile(this)
-            }
-        }
 
     private fun sourcesCacheDir(
         sourcesPath: Path,
@@ -150,29 +157,26 @@ class FileSystemChangesDetector(
             }
         }
 
+    @OptIn(ExperimentalSerializationApi::class)
     private fun Path.readSourceFilesCache(): Map<Path, ByteArray> {
         if (!Files.exists(this)) return emptyMap()
 
-        Files.newBufferedReader(this).use { reader ->
-            return reader
-                .lineSequence()
-                .associate {
-                    val (path, hash) = it.split(";")
-                    rootCachePath.fileSystem.getPath(path) to Base64.decodeBase64(hash)
-                }
-        }
+        val savedMap: Map<String, ByteArray> = Cbor.decodeFromByteArray(Files.readAllBytes(this))
+        return savedMap.mapKeys { fileSystem.getPath(it.key) }
     }
 
+    @OptIn(ExperimentalSerializationApi::class)
     private fun Path.writeSourceFilesCache(
         sourceFilesHashes: Map<Path, ByteArray>
     ) {
         if (!Files.exists(this)) Files.createFile(this)
 
-        Files.newBufferedWriter(this).use { writer ->
-            sourceFilesHashes.forEach {
-                writer.write("${it.key};${Base64.encodeBase64String(it.value)}\n")
-            }
-        }
+        Files.write(
+            this,
+            Cbor.encodeToByteArray(
+                sourceFilesHashes.mapKeys { it.key.toString() }
+            )
+        )
     }
 
     private class SourcesFileVisitor(
