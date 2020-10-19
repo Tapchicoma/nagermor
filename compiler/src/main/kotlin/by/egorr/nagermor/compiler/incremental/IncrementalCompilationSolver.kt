@@ -12,6 +12,7 @@ import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.Paths
 import java.nio.file.StandardOpenOption
+import kotlin.streams.asSequence
 
 @OptIn(ExperimentalSerializationApi::class)
 class IncrementalCompilationSolver(
@@ -74,7 +75,7 @@ class IncrementalCompilationSolver(
         sourceFiles
             .map { getDeletedSourceFileClassNameFromCache(it) }
             .forEach {
-                Files.deleteIfExists(outputDir.resolve("$it.$outputFileExtension"))
+                deleteWithInnerClasses(outputDir, it)
                 classToSourceFileMap.remove(it)
                 graph.deleteNode(it)
             }
@@ -112,6 +113,25 @@ class IncrementalCompilationSolver(
             "Removed $sourceFile is not known for this compiler"
         }
         return deletedClassMap.keys.first()
+    }
+
+    private fun deleteWithInnerClasses(
+        outputDir: Path,
+        parentClass: String
+    ) {
+        val parentClassOutputFile = outputDir.resolve("$parentClass.$outputFileExtension")
+        val className = parentClass.substringAfterLast('/')
+
+        Files
+            .list(parentClassOutputFile.parent)
+            .asSequence()
+            .filter { Files.isRegularFile(it) }
+            .filter {
+                it.fileName.toString().startsWith(className)
+            }
+            .forEach {
+                Files.delete(it)
+            }
     }
 
     @Serializable
