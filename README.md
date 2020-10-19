@@ -1,7 +1,14 @@
 ## Description
 
-TBA
+Proof of concept of incremental java sources compilation approach.
 
+Includes both CLI tool and sample gradle plugin.
+
+### Unsupported java features
+
+Currently implementation misses support for following Java features:
+- generics
+- Java 9+ modules
 
 ### CLI tool
 
@@ -12,8 +19,23 @@ To build command line tool run following command:
 
 Then you could run CLI via following command:
 ```shell
-./cli/build/install/nagermor/lib/nagermor
+./cli/build/install/nagermor/lib/nagermor --help
 ```
+
+Caches are stored in `<user-folder>/.nagermor` directory.
+
+### Gradle plugin
+
+Sources are located in `:gradle-plugin` module.
+
+Usage (not published to Gradle plugin portal):
+```gradle
+plugins {
+  id("by.egorr.nagermor")
+}
+```
+
+Plugin will create `compile*WithNagermor` tasks.
 
 ### Compilation
 
