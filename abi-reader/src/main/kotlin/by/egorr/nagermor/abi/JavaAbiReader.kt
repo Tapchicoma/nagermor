@@ -12,13 +12,15 @@ import java.lang.reflect.Modifier
 import java.nio.file.Files
 import java.nio.file.Path
 
-class JavaAbiReader : AbiReader {
+class JavaAbiReader(
+    private val compiledFileExtension: String = "class"
+) : AbiReader {
 
     override fun parseSourceFileAbi(
         compiledSourceFile: Path
     ): AbiReader.SourceFileAbi {
         val collector = Collector()
-        val classVisitor = JavaClassVisitor(collector)
+        val classVisitor = JavaClassVisitor(collector, compiledSourceFile, compiledFileExtension)
         val classReader = ClassReader(Files.newInputStream(compiledSourceFile))
         classReader.accept(classVisitor, 0)
 
@@ -27,6 +29,7 @@ class JavaAbiReader : AbiReader {
 
         return AbiReader.SourceFileAbi(
             className = classVisitor.className,
+            innerClassNames = collector.innerClasses,
             sourceFileName = collector.sourceFileName,
             privateTypes = privateTypes,
             publicTypes = publicTypes
@@ -35,12 +38,19 @@ class JavaAbiReader : AbiReader {
 
     private class Collector {
         private val _publicTypes = mutableSetOf<String>()
-        val publicTypes: Set<String> get() = _publicTypes.toSet()
+        val publicTypes: Set<String> get() = _publicTypes.map(::cleanInnerClasses).toSet()
 
         private val _privateTypes = mutableSetOf<String>()
-        val privateTypes: Set<String> get() = _privateTypes.toSet()
+        val privateTypes: Set<String> get() = _privateTypes.map(::cleanInnerClasses).toSet()
+
+        private val _innerClasses = mutableSetOf<String>()
+        val innerClasses: Set<String> get() = _innerClasses.toSet()
 
         var sourceFileName: String? = null
+
+        fun addInnerClassName(name: String) {
+            _innerClasses.add(name)
+        }
 
         fun addType(
             access: Int,
@@ -65,10 +75,14 @@ class JavaAbiReader : AbiReader {
         fun getObjectInternalName(
             descriptor: String
         ): String = Type.getType(descriptor).internalName
+
+        private fun cleanInnerClasses(type: String): String = type.substringBefore('$')
     }
 
     private class JavaClassVisitor(
-        private val collector: Collector
+        private val collector: Collector,
+        private val compiledSourceFile: Path,
+        private val compiledFileExtension: String
     ) : ClassVisitor(Opcodes.ASM9) {
         private var isClassPrivate: Boolean = true
         lateinit var className: String
@@ -166,12 +180,31 @@ class JavaAbiReader : AbiReader {
         }
 
         override fun visitInnerClass(
-            name: String?,
+            name: String,
             outerName: String?,
             innerName: String?,
             access: Int
         ) {
-            // TODO: Parse inner classes
+            // For some reason inner class could visit itself here
+            if (name == className ||
+                collector.innerClasses.contains(className)) {
+                return
+            }
+
+            val classReader = ClassReader(
+                Files.newInputStream(
+                    compiledSourceFile.resolveSibling("$name.$compiledFileExtension")
+                )
+            )
+            collector.addInnerClassName(name)
+            classReader.accept(
+                JavaClassVisitor(
+                    collector,
+                    compiledSourceFile,
+                    compiledFileExtension
+                ),
+                0
+            )
         }
 
         override fun visitSource(

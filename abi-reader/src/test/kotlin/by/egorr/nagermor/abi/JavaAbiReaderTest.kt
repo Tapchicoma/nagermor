@@ -187,6 +187,30 @@ internal class JavaAbiReaderTest {
         }
     }
 
+    @Test
+    internal fun `Should parse static inner class`() {
+        val classAbi = abiReader.parseSourceFileAbi(
+            getTestJavaClass("StaticInnerClass.class")
+        )
+
+        assertEquals(
+            setOf("StaticInnerClass\$InnerTest"),
+            classAbi.innerClassNames
+        )
+    }
+
+    @Test
+    internal fun `Should parse anonymous inner class`() {
+        val classAbi = abiReader.parseSourceFileAbi(
+            getTestJavaClass("ClassWithAnonymousClass.class")
+        )
+
+        assertEquals(
+            setOf("ClassWithAnonymousClass$1"),
+            classAbi.innerClassNames
+        )
+    }
+
     private fun getTestJavaClass(
         name: String
     ): Path = Paths.get(this::class.java.classLoader.getResource("java-source-output/$name")!!.toURI())
