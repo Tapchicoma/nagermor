@@ -211,6 +211,55 @@ internal class JavaAbiReaderTest {
         )
     }
 
+    @Test
+    internal fun `Should read class generic type`() {
+        val classAbi = abiReader.parseSourceFileAbi(
+            getTestJavaClass("ClassWithGeneric.class")
+        )
+
+        assertTrue {
+            classAbi.publicTypes.contains("Base")
+        }
+    }
+
+    @Test
+    internal fun `Should parse method return generic type`() {
+        val classAbi = abiReader.parseSourceFileAbi(
+            getTestJavaClass("MethodWithGenerics.class")
+        )
+
+        assertTrue {
+            classAbi.publicTypes.containsAll(
+                setOf("java/util/List", "Base")
+            )
+        }
+    }
+
+    @Test
+    internal fun `Should parse method generic params types`() {
+        val classAbi = abiReader.parseSourceFileAbi(
+            getTestJavaClass("MethodWithGenerics.class")
+        )
+
+        assertTrue {
+            classAbi.publicTypes.containsAll(
+                setOf("java/util/Set", "BaseInterface")
+            )
+        }
+    }
+
+    @Test
+    internal fun `Should parse field generic type`() {
+        val classAbi = abiReader.parseSourceFileAbi(
+            getTestJavaClass("ClassWithFieldGeneric.class")
+        )
+
+        assertEquals(
+            setOf("java/util/Set", "Base"),
+            classAbi.privateTypes
+        )
+    }
+
     private fun getTestJavaClass(
         name: String
     ): Path = Paths.get(this::class.java.classLoader.getResource("java-source-output/$name")!!.toURI())

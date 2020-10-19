@@ -8,6 +8,8 @@ import org.objectweb.asm.MethodVisitor
 import org.objectweb.asm.Opcodes
 import org.objectweb.asm.Type
 import org.objectweb.asm.TypePath
+import org.objectweb.asm.signature.SignatureReader
+import org.objectweb.asm.signature.SignatureVisitor
 import java.lang.reflect.Modifier
 import java.nio.file.Files
 import java.nio.file.Path
@@ -99,6 +101,9 @@ class JavaAbiReader(
             isClassPrivate = collector.isPrivateAccess(access)
             collector.addType(access) { types ->
                 if (superName != null) types.add(superName)
+                if (signature != null) {
+                    readSignature(signature, collector.isPrivateAccess(access))
+                }
 
                 interfaces?.forEach {
                     types.add(it)
@@ -150,6 +155,10 @@ class JavaAbiReader(
                 it.add(collector.getObjectInternalName(descriptor))
             }
 
+            if (signature != null) {
+                readSignature(signature, collector.isPrivateAccess(access))
+            }
+
             return JavaClassFieldVisitor(
                 collector,
                 collector.isPrivateAccess(access)
@@ -170,6 +179,10 @@ class JavaAbiReader(
                 }
                 exceptions?.forEach {
                     types.add(it)
+                }
+
+                if (signature != null) {
+                    readSignature(signature, collector.isPrivateAccess(access))
                 }
             }
 
@@ -212,6 +225,19 @@ class JavaAbiReader(
             debug: String?
         ) {
             collector.sourceFileName = source
+        }
+
+        private fun readSignature(
+            signature: String,
+            isPrivate: Boolean
+        ) {
+            val reader = SignatureReader(signature)
+            reader.accept(
+                JavaClassGenericsVisitor(
+                    collector,
+                    isPrivate
+                )
+            )
         }
     }
 
@@ -348,6 +374,17 @@ class JavaAbiReader(
             name: String
         ): AnnotationVisitor? {
             return JavaClassAnnotationVisitor(collector, isPrivate)
+        }
+    }
+
+    private class JavaClassGenericsVisitor(
+        private val collector: Collector,
+        private val isPrivate: Boolean
+    ) : SignatureVisitor(Opcodes.ASM9) {
+        override fun visitClassType(name: String) {
+            collector.addType(isPrivate) {
+                it.add(name)
+            }
         }
     }
 }

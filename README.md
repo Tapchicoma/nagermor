@@ -7,7 +7,6 @@ Includes both CLI tool and sample gradle plugin.
 ### Unsupported java features
 
 Currently implementation misses support for following Java features:
-- generics
 - Java 9+ modules
 
 ### CLI tool
