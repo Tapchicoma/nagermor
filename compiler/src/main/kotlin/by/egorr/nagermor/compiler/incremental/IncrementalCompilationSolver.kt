@@ -60,6 +60,7 @@ class IncrementalCompilationSolver(
         sourceFiles
             .associateWith { it.getJavaSourceFileTopElementName() }
             .mapValues {
+                deletePreviousOutputsIfPackageHasChanged(outputDir, it.key, it.value)
                 classToSourceFileMap[it.value] = it.key
                 abiReader.parseSourceFileAbi(outputDir.resolve("${it.value}.$outputFileExtension"))
             }
@@ -113,6 +114,24 @@ class IncrementalCompilationSolver(
             "Removed $sourceFile is not known for this compiler"
         }
         return deletedClassMap.keys.first()
+    }
+
+    private fun deletePreviousOutputsIfPackageHasChanged(
+        outputDir: Path,
+        sourceFile: Path,
+        newClassName: String
+    ) {
+        val existingMapping = classToSourceFileMap.filterValues { it == sourceFile }
+        if (existingMapping.size == 1) {
+            val oldClassName = existingMapping.keys.first()
+             if (oldClassName != newClassName) {
+                deleteWithInnerClasses(
+                    outputDir,
+                    oldClassName
+                )
+                classToSourceFileMap.remove(oldClassName)
+            }
+        }
     }
 
     private fun deleteWithInnerClasses(
